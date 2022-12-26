@@ -35,6 +35,21 @@
             //     http[s]://<domain>:<port>[/<namespace>]
             var socket = io();
 
+            var username = getCookie("username");
+            var room = getCookie("room");
+
+            if(room != null){
+                $('#join_room').attr("value", room);
+                $('#start_room').attr("value", room);
+                $('#log').append('<br>room: ' + room);
+
+            }
+            if(username != null){
+                $('#username').attr("value", username);
+                $('#log').append('<br>username: ' + username);
+            }
+            
+
             // Event handler for new connections.
             // The callback function is invoked when a connection with the
             // server is established.
@@ -57,21 +72,26 @@
                 $('#question_zone').text($('<div/>').text('Question #' + msg.count + ': ' + q[2]).html());
 
                 ans = "<form id='ans' method='POST' action='#'>"
-                for (let i = 0; i < 5; i++) {
+                for (let i = 0; i < q[3].length; i++) {
                     ans += "<input type='submit' value=" + q[3][i] + ">"
                 }
                 ans += "</form>"
 
                 $('#question_zone').append(ans);
 
+                $('form#ans').submit(function(event) {
+                    var answer = $(this).attr('value');
+                    var answer2 = $('ans').val();
+                    socket.emit('my_answer', {data: event});
+
+                    return false;
+                });
+
                 if (cb)
                     cb();
             });
 
-            $('form#ans').submit(function(event) {
-                socket.emit('my_event', {data: $('#ans_data').val()});
-                return false;
-            });
+            
 
             // Interval function that tests message latency by sending a "ping"
             // message. The server then responds with a "pong" message and the
@@ -108,12 +128,15 @@
                 socket.emit('my_broadcast_event', {data: $('#broadcast_data').val()});
                 return false;
             });
-            $('form#join').submit(function(event) {
-                socket.emit('join', {room: $('#join_room').val()});
-                return false;
-            });
+            // $('form#join').submit(function(event) {
+            //     socket.emit('join', {room: $('#join_room').val()});
+            //     return false;
+            // });
             $('form#name_join').submit(function(event) {
                 socket.emit('name_join', {username: $('#username').val(), room: $('#join_room').val()});
+                $('#start_room').attr("value", room);
+                setCookie("username", $('#username').val(), 1);
+                setCookie("room", $('#join_room').val(), 1);
                 return false;
             });
             $('form#start_room').submit(function(event) {
@@ -156,13 +179,13 @@
         <input type="submit" value="Broadcast">
     </form> -->
     <form id="name_join" method="POST" action='#'>
-        <input type="text" name="username" id="username" placeholder="Name">
-        <input type="text" name="join_room" id="join_room" placeholder="Room Name">
+        <input type="text" name="username" id="username" value="Name">
+        <input type="text" name="join_room" id="join_room" value="Room Name">
         <input type="submit" value="Join Room">
     </form>
     <form id="start_room" method="POST" action='#'>
-        <input type="text" name="start_room" id="start_room" placeholder="Room Name">
-        <input type="text" name="question_num" id="question_num" placeholder="No of Questions">
+        <input type="text" name="start_room" id="start_room" value="Room Name" disabled>
+        <input type="text" name="question_num" id="question_num" value="5">
         <input type="submit" value="Start Quiz">
     </form>
     <!-- <form id="leave" method="POST" action='#'>

@@ -72,7 +72,7 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             q = json.dumps(QUESTIONS[count], separators=(',', ':'))
             print("QUESTION TIME: ", QUESTIONS[count], q)
             socketio.emit('my_question',
-                        {'data': q, 'count': count},
+                            {'data': q, 'count': count},
                             to=room)
 
             socketio.sleep(quiz_timer)
@@ -177,11 +177,15 @@ def test_disconnect():
 @socketio.event
 def name_join(message):
     print(message["username"] + " is Joining Room " + message["room"])
+
+    print("Currently in: ", rooms())
     for i in rooms():
-        print(i)
+        print("Leaving: ", i)
         leave_room(i)
 
     join_room(message['room'])
+    print("Now in: ", rooms())
+
     session['receive_count'] = session.get('receive_count', 0) + 1
     emit('my_response',
          {'data': 'In rooms: ' + ', '.join(rooms()),
@@ -201,6 +205,10 @@ def start_room(message):
 
     room_thread.append( socketio.start_background_task(room_quiz_thread(room, quiz_flag, 5)) )
     
+
+@socketio.event
+def my_answer(message):
+    print("Answer: ", message)    
 
 if __name__ == '__main__':
     socketio.run(app)
