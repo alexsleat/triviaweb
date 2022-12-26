@@ -1,0 +1,183 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %} Feedback Form {% endblock %}</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>
+    <style>
+
+        :root {
+            --primary-header: #4c78b6;
+            --primary-bg: #ffffff;
+            --primary-text: #000000;
+            --primary-highlight: #000000;
+            --primary-shadow: #000000;
+
+            --secondary-header: #40a431;
+            --secondary-bg: #f3f3f3;
+            --secondary-text: #000000;
+            --secondary-highlight: #709972;
+            --secondary-shadow: #929292;
+
+            --tertiary-header: #4CAF50;
+            --tertiary-bg: #ffffff;
+            --tertiary-text: #000000;
+            --tertiary-highlight: #000000;
+            --tertiary-shadow: #000000;
+        }
+
+        nav a {
+            color: var(--primary-header);
+            font-size: 3em;
+            margin-left: 50px;
+            text-decoration: none;
+        }
+
+        
+        [type=radio] { 
+            position: relative;
+
+        }
+
+        [type=submit]{
+            background-color: var(--secondary-header);
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 32px;
+            margin-left: 45%;
+            margin-right: auto;
+        }
+
+        .button{
+            background-color: var(--secondary-header);
+            border: none;
+            color: white;
+            padding: 15px 32px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 24px;
+            margin-left: 5%;
+            margin-right: auto;
+        }
+
+        .start_page{
+            text-align: center;
+        }
+
+        .start_join .start_create{
+            text-align: left;
+        }
+
+        /* RADIO */
+        .radio_text {
+            padding: 10px;
+            margin: 5px;
+            background-color: var(--secondary-bg);
+            text-align: center;
+        }
+        .radio_img {
+            padding: 10px;
+            margin: 5px;
+            background-color: var(--secondary-bg);
+            text-align: center;
+        }
+
+        /* HIDE RADIO */
+        .radio_img input[type=radio] { 
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+            
+
+        }
+        
+        /* IMAGE STYLES */
+        [type=radio] + img {
+            cursor: pointer; 
+                       
+        }
+
+        /* CHECKED STYLES */
+        [type=radio]:checked + img {
+            border: 1px solid #fff;
+            box-shadow: 0 0 3px 3px var(--secondary-header);
+        }
+        input[type=radio]:checked + label>img {
+            border: 1px solid #fff;
+            box-shadow: 0 0 3px 3px var(--secondary-header);
+            background-color: var(--secondary-highlight);
+        }
+
+        .radio_text {
+            margin: 10px;
+        }
+
+        .radio_text input[type="radio"] {
+            opacity: 0;
+            position: fixed;
+            width: 0;
+        }
+
+        .radio_img img {
+            display: inline-block;
+
+            font-family: sans-serif, Arial;
+            font-size: 32px;
+            border: 1px solid #fff;
+            box-shadow: 0 0 3px 3px var(--secondary-shadow);
+            padding: 10px;
+            margin: 5px;
+        }
+
+        .radio_text label {
+            display: inline-block;
+
+            font-family: sans-serif, Arial;
+            font-size: 32px;
+            border: 1px solid #fff;
+            box-shadow: 0 0 3px 3px var(--secondary-shadow);
+            padding: 10px;
+            margin: 5px;
+        }
+
+        .radio_text label:hover {
+            background-color: var(--secondary-highligt);
+        }
+
+        .radio_text input[type="radio"]:focus + label {
+            border: 1px solid #444;
+        }
+
+        .radio_text input[type="radio"]:checked + label {
+            border-color: var(--secondary-header);
+            background-color: var(--secondary-highlight);
+        }
+
+        .main {
+            margin: 10px;
+            text-align: center;
+        }
+
+    </style>
+</head>
+<body>
+    <nav>
+        <a href="{{ url_for('home') }}">Trivia</a>
+    </nav>
+    <hr>
+    <div class="content">
+        {% block content %} {% endblock %}
+    </div>
+
+</body>
+<script defer type="text/javascript"
+        src="{{ url_for('static', filename='script.js') }}"></script>
+</html>
