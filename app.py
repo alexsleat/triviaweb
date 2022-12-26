@@ -26,8 +26,10 @@ socketio = SocketIO(app, async_mode=async_mode)
 thread = None
 thread_lock = Lock()
 
-quiz_flag = None
-quiz_timer = 5
+room_thread = [ ]
+
+# quiz_flag = None
+# quiz_timer = 5
 
 def background_thread():
     """Example of how to send server generated events to clients."""
@@ -35,8 +37,8 @@ def background_thread():
     while True:
 
         ### Check if there is questions in the list
-        if quiz_flag: 
-            for i in range(quiz_flag):
+        if True: 
+            for i in range(5):
                 count = i
                 if count >= len(QUESTIONS):
                     count = 0
@@ -56,42 +58,69 @@ def background_thread():
         socketio.sleep(quiz_timer)
 
 
+def room_quiz_thread(room, quiz_flag, quiz_timer):
+    """Example of how to send server generated events to clients."""
+    print("QUIZ TIME")
+    count = 0
+    ### Check if there is questions in the list
+    if quiz_flag: 
+        for i in range(quiz_flag):
+            count = i
+            if count >= len(QUESTIONS):
+                count = 0
+
+            q = json.dumps(QUESTIONS[count], separators=(',', ':'))
+            print("QUESTION TIME: ", QUESTIONS[count], q)
+            socketio.emit('my_question',
+                        {'data': q, 'count': count},
+                            to=room)
+
+            socketio.sleep(quiz_timer)
+
+    #### When no 
+    else:
+        socketio.emit('my_question',
+                    {'data': "", 'count': -1},
+                        to="hello_world")
+
+        
+
 @app.route('/')
 def index():
     return render_template('index.html', async_mode=socketio.async_mode)
 
 
-@socketio.event
-def my_event(message):
-    session['receive_count'] = session.get('receive_count', 0) + 1
-    emit('my_response',
-         {'data': message['data'], 'count': session['receive_count']})
+# @socketio.event
+# def my_event(message):
+#     session['receive_count'] = session.get('receive_count', 0) + 1
+#     emit('my_response',
+#          {'data': message['data'], 'count': session['receive_count']})
 
 
-@socketio.event
-def my_broadcast_event(message):
-    session['receive_count'] = session.get('receive_count', 0) + 1
-    emit('my_response',
-         {'data': message['data'], 'count': session['receive_count']},
-         broadcast=True)
+# @socketio.event
+# def my_broadcast_event(message):
+#     session['receive_count'] = session.get('receive_count', 0) + 1
+#     emit('my_response',
+#          {'data': message['data'], 'count': session['receive_count']},
+#          broadcast=True)
 
 
-@socketio.event
-def join(message):
-    join_room(message['room'])
-    session['receive_count'] = session.get('receive_count', 0) + 1
-    emit('my_response',
-         {'data': 'In rooms: ' + ', '.join(rooms()),
-          'count': session['receive_count']})
+# @socketio.event
+# def join(message):
+#     join_room(message['room'])
+#     session['receive_count'] = session.get('receive_count', 0) + 1
+#     emit('my_response',
+#          {'data': 'In rooms: ' + ', '.join(rooms()),
+#           'count': session['receive_count']})
 
 
-@socketio.event
-def leave(message):
-    leave_room(message['room'])
-    session['receive_count'] = session.get('receive_count', 0) + 1
-    emit('my_response',
-         {'data': 'In rooms: ' + ', '.join(rooms()),
-          'count': session['receive_count']})
+# @socketio.event
+# def leave(message):
+#     leave_room(message['room'])
+#     session['receive_count'] = session.get('receive_count', 0) + 1
+#     emit('my_response',
+#          {'data': 'In rooms: ' + ', '.join(rooms()),
+#           'count': session['receive_count']})
 
 
 @socketio.on('close_room')
@@ -144,6 +173,34 @@ def connect():
 def test_disconnect():
     print('Client disconnected', request.sid)
 
+
+@socketio.event
+def name_join(message):
+    print(message["username"] + " is Joining Room " + message["room"])
+    for i in rooms():
+        print(i)
+        leave_room(i)
+
+    join_room(message['room'])
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': 'In rooms: ' + ', '.join(rooms()),
+          'count': session['receive_count']})
+
+@socketio.event
+def start_room(message):
+    print(message)
+    room = message["room"]
+    numofq =  message["numofq"]
+    print(room + " is starting with " + numofq + " questions")
+
+    quiz_flag = int(numofq)
+
+    global room_thread
+    print(room_thread)
+
+    room_thread.append( socketio.start_background_task(room_quiz_thread(room, quiz_flag, 5)) )
+    
 
 if __name__ == '__main__':
     socketio.run(app)
