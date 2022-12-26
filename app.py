@@ -1,80 +1,148 @@
-from flask import Flask, render_template, session, request, jsonify
-from flask_login import LoginManager, UserMixin, current_user, login_user, \
-    logout_user
-from flask_session import Session
-from flask_socketio import SocketIO, emit
+from threading import Lock
+from flask import Flask, render_template, session, request, \
+    copy_current_request_context
+from flask_socketio import SocketIO, emit, join_room, leave_room, \
+    close_room, rooms, disconnect
+import json
+
+
+QUESTIONS = [
+    ["Q01", "text_question", "what is the answer", ["one", "two","three", "four", "five"]],
+    ["Q02", "text_question", "vad ar svaret", ["ett", "tva", "tre", "fyra", "fem"]],
+    ["Q03", "text_question", "tre svarar fragar", ["1", "2","3"]],
+    ["Q04", "text_question", "who is champion", ["alex", "mom","dad"]],
+    ["Q05", "text_question", "who is the dog", ["ted", "snowy"]],
+    ["Q06", "text_question", "who is the cat", ["snowy", "ted"]],
+]
+
+# Set this variable to "threading", "eventlet" or "gevent" to test the
+# different async modes, or leave it set to None for the application to choose
+# the best option based on installed packages.
+async_mode = None
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'top-secret!'
-app.config['SESSION_TYPE'] = 'filesystem'
-login = LoginManager(app)
-Session(app)
-socketio = SocketIO(app, manage_session=False)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode=async_mode)
+thread = None
+thread_lock = Lock()
 
+quiz_flag = None
+quiz_timer = 5
 
-class User(UserMixin, object):
-    def __init__(self, id=None):
-        self.id = id
+def background_thread():
+    """Example of how to send server generated events to clients."""
+    count = 0
+    while True:
 
+        ### Check if there is questions in the list
+        if quiz_flag: 
+            for i in range(quiz_flag):
+                count = i
+                if count >= len(QUESTIONS):
+                    count = 0
 
-@login.user_loader
-def load_user(id):
-    return User(id)
+                q = json.dumps(QUESTIONS[count], separators=(',', ':'))
+                print("QUESTION TIME: ", QUESTIONS[count], q)
+                socketio.emit('my_question',
+                            {'data': q, 'count': count},
+                                to="hello_world")
+
+        #### When no 
+        else:
+            socketio.emit('my_question',
+                        {'data': "", 'count': -1},
+                            to="hello_world")
+
+        socketio.sleep(quiz_timer)
 
 
 @app.route('/')
 def index():
-    return render_template('base.html')
+    return render_template('index.html', async_mode=socketio.async_mode)
 
 
-@app.route('/session', methods=['GET', 'POST'])
-def session_access():
-    if request.method == 'GET':
-        return jsonify({
-            'session': session.get('value', ''),
-            'user': current_user.id
-                if current_user.is_authenticated else 'anonymous'
-        })
-    data = request.get_json()
-    if 'msg' in data:
-        print(data)
-        if data['msg']:
-            # emit(data['user'] + ":" + data['msg'])
-            emit('refresh-session', {
-                'msg': data['msg'],
-                'session': session.get('value', ''),
-                'user': current_user.id
-                    if current_user.is_authenticated else 'anonymous'
-            })
-
-    elif 'session' in data:
-        session['value'] = data['session']
-    elif 'user' in data:
-        if data['user']:
-            login_user(User(data['user']))
-        else:
-            logout_user()
-    return '', 204
+@socketio.event
+def my_event(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': message['data'], 'count': session['receive_count']})
 
 
-@socketio.on('get-session')
-def get_session():
-    emit('refresh-session', {
-        'session': session.get('value', ''),
-        'user': current_user.id
-            if current_user.is_authenticated else 'anonymous'
-    })
+@socketio.event
+def my_broadcast_event(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': message['data'], 'count': session['receive_count']},
+         broadcast=True)
 
 
-@socketio.on('set-session')
-def set_session(data):
-    if 'session' in data:
-        session['value'] = data['session']
-    elif 'user' in data:
-        if data['user'] is not None:
-            login_user(User(data['user']))
-        else:
-            logout_user()
+@socketio.event
+def join(message):
+    join_room(message['room'])
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': 'In rooms: ' + ', '.join(rooms()),
+          'count': session['receive_count']})
+
+
+@socketio.event
+def leave(message):
+    leave_room(message['room'])
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': 'In rooms: ' + ', '.join(rooms()),
+          'count': session['receive_count']})
+
+
+@socketio.on('close_room')
+def on_close_room(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response', {'data': 'Room ' + message['room'] + ' is closing.',
+                         'count': session['receive_count']},
+         to=message['room'])
+    close_room(message['room'])
+
+
+@socketio.event
+def my_room_event(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': message['data'], 'count': session['receive_count']},
+         to=message['room'])
+
+
+@socketio.event
+def disconnect_request():
+    @copy_current_request_context
+    def can_disconnect():
+        disconnect()
+
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    # for this emit we use a callback function
+    # when the callback function is invoked we know that the message has been
+    # received and it is safe to disconnect
+    emit('my_response',
+         {'data': 'Disconnected!', 'count': session['receive_count']},
+         callback=can_disconnect)
+
+
+@socketio.event
+def my_ping():
+    emit('my_pong')
+
+
+@socketio.event
+def connect():
+    global thread
+    with thread_lock:
+        if thread is None:
+            thread = socketio.start_background_task(background_thread)
+    emit('my_response', {'data': 'Connected', 'count': 0})
+
+
+@socketio.on('disconnect')
+def test_disconnect():
+    print('Client disconnected', request.sid)
 
 
 if __name__ == '__main__':
