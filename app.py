@@ -114,13 +114,14 @@ def index():
 #           'count': session['receive_count']})
 
 
-# @socketio.event
-# def leave(message):
-#     leave_room(message['room'])
-#     session['receive_count'] = session.get('receive_count', 0) + 1
-#     emit('my_response',
-#          {'data': 'In rooms: ' + ', '.join(rooms()),
-#           'count': session['receive_count']})
+@socketio.event
+def leave(message):
+    print("Leave button, leaving: ", message['room'])
+    leave_room(message['room'])
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': 'In rooms: ' + ', '.join(rooms()),
+          'count': session['receive_count']})
 
 
 @socketio.on('close_room')

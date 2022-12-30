@@ -40,7 +40,7 @@
 
             if(room != null){
                 $('#join_room').attr("value", room);
-                $('#start_room').attr("value", room);
+                $('#start_room_button').attr("value", room);
                 $('#log').append('<br>room: ' + room);
 
             }
@@ -134,13 +134,13 @@
             // });
             $('form#name_join').submit(function(event) {
                 socket.emit('name_join', {username: $('#username').val(), room: $('#join_room').val()});
-                $('#start_room').attr("value", room);
+                $('#start_room_button').attr("value", room);
                 setCookie("username", $('#username').val(), 1);
                 setCookie("room", $('#join_room').val(), 1);
                 return false;
             });
             $('form#start_room').submit(function(event) {
-                socket.emit('start_room', {room: $('#start_room').val(), numofq: $('#question_num').val()});
+                socket.emit('start_room', {room: $('#start_room_button').val(), numofq: $('#question_num').val()});
                 return false;
             });
             $('form#leave').submit(function(event) {
@@ -184,14 +184,14 @@
         <input type="submit" value="Join Room">
     </form>
     <form id="start_room" method="POST" action='#'>
-        <input type="text" name="start_room" id="start_room" value="Room Name" disabled>
+        <input type="text" name="start_room_button" id="start_room_button" value="Room Name" placeholder="Room Name" disabled>
         <input type="text" name="question_num" id="question_num" value="5">
         <input type="submit" value="Start Quiz">
     </form>
-    <!-- <form id="leave" method="POST" action='#'>
+    <form id="leave" method="POST" action='#'>
         <input type="text" name="leave_room" id="leave_room" placeholder="Room Name">
         <input type="submit" value="Leave Room">
-    </form> -->
+    </form>
     <!-- <form id="send_room" method="POST" action='#'>
         <input type="text" name="room_name" id="room_name" placeholder="Room Name">
         <input type="text" name="room_data" id="room_data" placeholder="Message">
