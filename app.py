@@ -3,17 +3,27 @@ from flask import Flask, render_template, session, request, \
     copy_current_request_context
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
-import json
+import urllib.request, json 
+from html.parser import HTMLParser
 
 
-QUESTIONS = [
-    ["Q01", "text_question", "what is the answer", ["one", "two","three", "four", "five"]],
-    ["Q02", "text_question", "vad ar svaret", ["ett", "tva", "tre", "fyra", "fem"]],
-    ["Q03", "text_question", "tre svarar fragar", ["1", "2","3"]],
-    ["Q04", "text_question", "who is champion", ["alex", "mom","dad"]],
-    ["Q05", "text_question", "who is the dog", ["ted", "snowy"]],
-    ["Q06", "text_question", "who is the cat", ["snowy", "ted"]],
-]
+# QUESTIONS = [
+#     ["Q01", "text_question", "what is the answer", ["one", "two","three", "four", "five"]],
+#     ["Q02", "text_question", "vad ar svaret", ["ett", "tva", "tre", "fyra", "fem"]],
+#     ["Q03", "text_question", "tre svarar fragar", ["1", "2","3"]],
+#     ["Q04", "text_question", "who is champion", ["alex", "mom","dad"]],
+#     ["Q05", "text_question", "who is the dog", ["ted", "snowy"]],
+#     ["Q06", "text_question", "who is the cat", ["snowy", "ted"]],
+# ]
+
+# QUESTION_URL = "https://opentdb.com/api.php?amount=10"
+# QUESTIONS_JSON = None
+# with urllib.request.urlopen(QUESTION_URL) as url:
+#     data = json.load(url)
+#     QUESTIONS_JSON = data["results"]
+#     print(QUESTIONS_JSON)
+
+
 
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
@@ -25,6 +35,8 @@ app.config['SECRET_KEY'] = 'secret!'
 socketio = SocketIO(app, async_mode=async_mode)
 thread = None
 thread_lock = Lock()
+
+h = HTMLParser()
 
 room_thread = [ ]
 
@@ -55,12 +67,24 @@ def background_thread():
                         {'data': "", 'count': -1},
                             to="hello_world")
 
-        socketio.sleep(quiz_timer)
+        socketio.sleep(5)
 
-
+###############################################
+# MAIN Thread
+#
+#################################################
 def room_quiz_thread(room, quiz_flag, quiz_timer):
     """Example of how to send server generated events to clients."""
     print("QUIZ TIME")
+
+    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
+    QUESTIONS = None
+    with urllib.request.urlopen(QUESTION_URL) as url:
+        data = json.load(url)
+
+        QUESTIONS = data["results"]
+        # print(QUESTIONS)
+
     count = 0
     ### Check if there is questions in the list
     if quiz_flag: 
@@ -69,7 +93,15 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             if count >= len(QUESTIONS):
                 count = 0
 
-            q = json.dumps(QUESTIONS[count], separators=(',', ':'))
+            #q = json.dumps(QUESTIONS[count], separators=(',', ':'))
+            print("QUESTION ::: ", QUESTIONS[count])
+            answers = QUESTIONS[count]["incorrect_answers"]
+            answers.insert(0, QUESTIONS[count]["correct_answer"] )
+            q_string = ["Q"+str(count), "text_question", QUESTIONS[count]["question"], answers]
+
+            print(q_string)
+            q = json.dumps(q_string, separators=(',', ':'))
+
             print("QUESTION TIME: ", QUESTIONS[count], q)
             socketio.emit('my_question',
                             {'data': q, 'count': count},
@@ -164,9 +196,9 @@ def my_ping():
 @socketio.event
 def connect():
     global thread
-    with thread_lock:
-        if thread is None:
-            thread = socketio.start_background_task(background_thread)
+    # with thread_lock:
+    #     if thread is None:
+    #         thread = socketio.start_background_task(background_thread)
     emit('my_response', {'data': 'Connected', 'count': 0})
 
 
