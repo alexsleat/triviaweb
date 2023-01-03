@@ -79,6 +79,22 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
 
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
     QUESTIONS = None
+
+    players = { "player1" : 0,
+                "player2" : 0,
+                "player3" : 0,
+                "player4" : 0}
+
+    current_question = ""
+    correct_answer = ""
+
+    player_answers = { "player1" : "",
+                        "player2" : "",
+                        "player3" : "",
+                        "player4" : ""}
+
+
+
     with urllib.request.urlopen(QUESTION_URL) as url:
         data = json.load(url)
 
@@ -107,7 +123,32 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
                             {'data': q, 'count': count},
                             to=room)
 
+            for i in range(quiz_timer):
+                print("Time left: ", str(quiz_timer - i))
+                data_string = ["time_left", str(quiz_timer - i)]
+                tl = json.dumps(data_string, separators=(',', ':'))
+                socketio.emit('my_countdown',
+                            {'data': tl},
+                            to=room)
+                socketio.sleep(1)
+                
+            print("ANSWER TIME")
+            #### Send Real Answer and if they were correct:
+            # socketio.emit('my_answer',
+            #                 {'answer': q, 'points': count},
+            #                 to=room)
+
+            ##### Send everyones points in leaderboard
+
+            p = json.dumps(players, separators=(',', ':'))
+
+            socketio.emit('my_leaderboard',
+                            {'data': p,},
+                            to=room)
+
             socketio.sleep(quiz_timer)
+
+            
 
     #### When no 
     else:

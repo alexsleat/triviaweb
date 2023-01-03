@@ -69,14 +69,14 @@
             });
 
             socket.on('my_question', function(msg, cb) {
-                q = JSON.parse(msg.data)
+                q = JSON.parse(msg.data);
                 $('#question_zone').text($('<div/>').text('Question #' + msg.count + ': ' + q[2]).html());
 
-                ans = "<form id='ans' method='POST' action='#'>"
+                ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
-                    ans += "<input type='submit' value=" + q[3][i] + ">"
+                    ans += "<input type='submit' value=" + q[3][i] + ">";
                 }
-                ans += "</form>"
+                ans += "</form>";
 
                 $('#question_zone').append(ans);
 
@@ -90,6 +90,32 @@
 
                 if (cb)
                     cb();
+            });
+
+
+            socket.on('my_leaderboard', function(msg, cb) {
+
+                msg_json = JSON.parse(msg.data);
+
+                $('#question_zone').text("");
+                $('#room_stats').text("");
+                text = "";
+                for (const [key, value] of Object.entries(msg_json)) {
+                    text += key + " : " + value + "<br>";
+                }
+                text += "<br>";
+                $('#room_stats').append(text);
+
+            });
+
+
+            socket.on('my_countdown', function(msg, cb) {
+
+
+                msg_json = JSON.parse(msg.data);
+
+                text = "Time Left: " + msg_json[1] + " seconds <br>";
+                $('#room_stats').text(text);
             });
 
             
