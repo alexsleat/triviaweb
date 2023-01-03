@@ -74,16 +74,20 @@
 
                 ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
-                    ans += "<input type='submit' value=" + q[3][i] + ">";
+                    ans += "<input type='button' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
                 }
                 ans += "</form>";
 
                 $('#question_zone').append(ans);
 
-                $('form#ans').submit(function(event) {
-                    var answer = $(this).attr('value');
-                    var answer2 = $('ans').val();
-                    socket.emit('my_answer', {data: event});
+                //$('form#ans').click(function(event) {
+                $('input:button').click(function(event) {
+                    var btnValue = $(this).val();
+                    // socket.emit('my_answer', {data: event});
+
+                    socket.emit('my_answer', {room: $('#join_room').val(),
+                                            username: $('#username').val(), 
+                                            answer: btnValue });
 
                     return false;
                 });
@@ -92,12 +96,25 @@
                     cb();
             });
 
+            socket.on('my_question_answer', function(msg, cb) {
+
+                msg_json = JSON.parse(msg.data);
+
+                $('#question_zone').text("");
+                text = "";
+                for (const [key, value] of Object.entries(msg_json)) {
+                    text += key + value + "<br>";
+                }
+                text += "<br>";
+                $('#question_zone').append(text);
+
+            });
 
             socket.on('my_leaderboard', function(msg, cb) {
 
                 msg_json = JSON.parse(msg.data);
 
-                $('#question_zone').text("");
+                //$('#question_zone').text("");
                 $('#room_stats').text("");
                 text = "";
                 for (const [key, value] of Object.entries(msg_json)) {
