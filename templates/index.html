@@ -68,22 +68,22 @@
                     cb();
             });
 
+            // Question handler
             socket.on('my_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
-                $('#question_zone').text($('<div/>').text('Question #' + msg.count + ': ' + q[2]).html());
 
-                ans = "<form id='ans' method='POST' action='#'>";
+                ans = 'Question #' + msg.count + ': ' + q[2];
+                ans += "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
                     ans += "<input type='button' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
                 }
                 ans += "</form>";
 
-                $('#question_zone').append(ans);
+                $('#question_zone').html(ans);
 
-                //$('form#ans').click(function(event) {
+                // Handle answer buttons, emit the answer to the room
                 $('input:button').click(function(event) {
                     var btnValue = $(this).val();
-                    // socket.emit('my_answer', {data: event});
 
                     socket.emit('my_answer', {room: $('#join_room').val(),
                                             username: $('#username').val(), 
@@ -96,43 +96,41 @@
                     cb();
             });
 
+            // Question answers handler
             socket.on('my_question_answer', function(msg, cb) {
 
                 msg_json = JSON.parse(msg.data);
 
-                $('#question_zone').text("");
                 text = "";
                 for (const [key, value] of Object.entries(msg_json)) {
                     text += key + value + "<br>";
                 }
                 text += "<br>";
-                $('#question_zone').append(text);
+                $('#question_zone').html(text);
 
             });
 
+            // Leaderboard handler
             socket.on('my_leaderboard', function(msg, cb) {
 
                 msg_json = JSON.parse(msg.data);
 
-                //$('#question_zone').text("");
-                $('#room_leaderboard').text("");
                 text = "";
                 for (const [key, value] of Object.entries(msg_json)) {
                     text += key + " : " + value + "<br>";
                 }
                 text += "<br>";
-                $('#room_leaderboard').text(text);
+                $('#room_leaderboard').html(text);
 
             });
 
-
+            // Countdown handler
             socket.on('my_countdown', function(msg, cb) {
-
 
                 msg_json = JSON.parse(msg.data);
 
                 text = "Time Left: " + msg_json[1] + " seconds <br>";
-                $('#room_stats').text(text);
+                $('#room_stats').html(text);
             });
 
             

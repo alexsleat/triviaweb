@@ -1,5 +1,6 @@
 from threading import Lock
 from queue import Queue
+import random
 
 from flask import Flask, render_template, session, request, \
     copy_current_request_context
@@ -42,6 +43,15 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10):
         print("Room already created")
         if threads_dict[room]["running"]:
             print("Room already running")
+        else:
+            if(running):
+                threads_dict[room]["running"] = True
+                print(threads_dict)
+                threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+
+            else:
+                threads_dict[room]["running"] = False
+                print(threads_dict)
     else:
 
         threads_dict[room] = {}
@@ -94,11 +104,6 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
     QUESTIONS = None
 
-    # players = { "player1" : 0,
-    #             "player2" : 0,
-    #             "player3" : 0,
-    #             "player4" : 0}
-
     current_question = ""
     correct_answer = ""
 
@@ -126,6 +131,7 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             
             answers = QUESTIONS[count]["incorrect_answers"]
             answers.insert(0, correct_answer )
+            random.shuffle(answers)
 
             question_l = ["Q"+str(count), "text_question", current_question, answers]
             convert_and_send_json(room, 'my_question', {'data': question_l, 'count': count})
@@ -281,10 +287,6 @@ def name_join(message):
     print("Now in: ", rooms())
 
     session['receive_count'] = session.get('receive_count', 0) + 1
-    # emit('my_response',
-    #      {'data': 'In rooms: ' + ', '.join(rooms()),
-    #       'count': session['receive_count']})
-
 
     ## Check if room already exists:
     update_room_list(room, False)
