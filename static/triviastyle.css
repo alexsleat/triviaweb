@@ -2,6 +2,70 @@ body {
     background-color: rgb(215, 152, 245);
 }
 
+#top_row{
+    display: block;
+    width: 100%;
+    display: inline-block;
+}
+
 #menu {
     display: block;
+    width: 50%;
+    float: left;
+}
+
+#room_leaderboard{
+    width: 50%;
+    float: left;
+    background-color: #f984dc; /* Green */
+    border: 1px;
+    border-color: #a7d42a;
+    color: rgb(0, 0, 0);
+    text-align: left;
+    text-decoration: none;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+#questions{
+    width:100%;
+    display: inline-block;
+}
+
+#selected_answer{
+    font-weight: bold;
+}
+
+
+.loading-bar-bg{
+    background-color: rgb(166, 122, 248);
+    height: 30px;
+}
+.loading-bar-bar{
+    background-color: rgb(76, 108, 248);
+    margin: 5px;
+}
+
+#ans {
+    color: rgb(0, 0, 0);
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+#ans input[type=button]{
+    background-color: #a7d42a; /* Green */
+    border: none;
+    color: rgb(0, 0, 0);
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
 }

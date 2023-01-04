@@ -72,22 +72,28 @@
             socket.on('my_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
 
-                ans = 'Question #' + msg.count + ': ' + q[2];
-                ans += "<form id='ans' method='POST' action='#'>";
+                que = "<div id='question'> <h2>Question : " + q[2] + "</h2> </div>";
+                // ans = "<div id='question'> Question : " + q[2] + "</div>";
+                ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
                     ans += "<input type='button' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
                 }
                 ans += "</form>";
 
-                $('#question_zone').html(ans);
+                $('#question_zone').html(que);
+                $('#answer_zone').html(ans);
 
                 // Handle answer buttons, emit the answer to the room
                 $('input:button').click(function(event) {
                     var btnValue = $(this).val();
 
+                    // Send Answer
                     socket.emit('my_answer', {room: $('#join_room').val(),
                                             username: $('#username').val(), 
                                             answer: btnValue });
+                    // Change Buttons:
+                    ans = "<div id='selected_answer'>" + btnValue + "</div>";
+                    $('#answer_zone').html(ans);
 
                     return false;
                 });
@@ -101,12 +107,14 @@
 
                 msg_json = JSON.parse(msg.data);
 
-                text = "";
-                for (const [key, value] of Object.entries(msg_json)) {
-                    text += key + value + "<br>";
-                }
+                // text = "";
+                // for (const [key, value] of Object.entries(msg_json)) {
+                //     text += key + value + "<br>";
+                // }
+
+                text = "<div id='question'> " + msg_json[0] + "</div> : <div id='selected_answer'>" + msg_json[1] + "</div>";
                 text += "<br>";
-                $('#question_zone').html(text);
+                $('#answer_zone').html(text);
 
             });
 
@@ -115,7 +123,7 @@
 
                 msg_json = JSON.parse(msg.data);
 
-                text = "";
+                text = "<h2>Leaderboard:</h2>";
                 for (const [key, value] of Object.entries(msg_json)) {
                     text += key + " : " + value + "<br>";
                 }
@@ -129,7 +137,15 @@
 
                 msg_json = JSON.parse(msg.data);
 
-                text = "Time Left: " + msg_json[1] + " seconds <br>";
+                //text = "Time Left: " + msg_json[1] + " seconds <br>";
+                percentage_left = msg_json[1] / msg_json[2] * 100;
+                // Make it go left to right, rather than right to left:
+                percentage_left = 100 + (percentage_left*-1)
+
+                text = '<div class="loading-bar-bg">';
+                text += '<div class="loading-bar-bar" style="height:24px;width:' + percentage_left +'%"></div>';
+                text += '</div>';
+
                 $('#room_stats').html(text);
             });
 
@@ -211,50 +227,62 @@
       Current transport is: <b><span id="transport"></span></b><br>
       Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
     </p> -->
-    <div id="menu">
-        <h2>Menu:</h2>
-        <!-- <form id="emit" method="POST" action='#'>
-            <input type="text" name="emit_data" id="emit_data" placeholder="Message">
-            <input type="submit" value="Echo">
-        </form>
-        <form id="broadcast" method="POST" action='#'>
-            <input type="text" name="broadcast_data" id="broadcast_data" placeholder="Message">
-            <input type="submit" value="Broadcast">
-        </form> -->
-        <form id="name_join" method="POST" action='#'>
-            <input type="text" name="username" id="username" value="Name">
-            <input type="text" name="join_room" id="join_room" value="Room Name">
-            <input type="submit" value="Join Room">
-        </form>
-        <form id="start_room" method="POST" action='#'>
-            <input type="text" name="start_room_button" id="start_room_button" value="Room Name" placeholder="Room Name" disabled>
-            <input type="text" name="question_num" id="question_num" value="5">
-            <input type="submit" value="Start Quiz">
-        </form>
-        <form id="leave" method="POST" action='#'>
-            <input type="text" name="leave_room" id="leave_room" placeholder="Room Name">
-            <input type="submit" value="Leave Room">
-        </form>
-        <!-- <form id="send_room" method="POST" action='#'>
-            <input type="text" name="room_name" id="room_name" placeholder="Room Name">
-            <input type="text" name="room_data" id="room_data" placeholder="Message">
-            <input type="submit" value="Send to Room">
-        </form> -->
-        <!-- <form id="close" method="POST" action="#">
-            <input type="text" name="close_room" id="close_room" placeholder="Room Name">
-            <input type="submit" value="Close Room">
-        </form> -->
-        <!-- <form id="disconnect" method="POST" action="#">
-            <input type="submit" value="Disconnect">
-        </form> -->
+    <div id="top_row">
+        <div id="menu">
+            <h2>Menu:</h2>
+            <!-- <form id="emit" method="POST" action='#'>
+                <input type="text" name="emit_data" id="emit_data" placeholder="Message">
+                <input type="submit" value="Echo">
+            </form>
+            <form id="broadcast" method="POST" action='#'>
+                <input type="text" name="broadcast_data" id="broadcast_data" placeholder="Message">
+                <input type="submit" value="Broadcast">
+            </form> -->
+            <form id="name_join" method="POST" action='#'>
+                <input type="text" name="username" id="username" value="Name">
+                <input type="text" name="join_room" id="join_room" value="Room Name">
+                <input type="submit" value="Join Room">
+            </form>
+            <form id="start_room" method="POST" action='#'>
+                <input type="text" name="start_room_button" id="start_room_button" value="Room Name" placeholder="Room Name" disabled>
+                <input type="text" name="question_num" id="question_num" value="5">
+                <input type="submit" value="Start Quiz">
+            </form>
+            <!-- <form id="leave" method="POST" action='#'>
+                <input type="text" name="leave_room" id="leave_room" placeholder="Room Name">
+                <input type="submit" value="Leave Room">
+            </form> -->
+            <!-- <form id="send_room" method="POST" action='#'>
+                <input type="text" name="room_name" id="room_name" placeholder="Room Name">
+                <input type="text" name="room_data" id="room_data" placeholder="Message">
+                <input type="submit" value="Send to Room">
+            </form> -->
+            <!-- <form id="close" method="POST" action="#">
+                <input type="text" name="close_room" id="close_room" placeholder="Room Name">
+                <input type="submit" value="Close Room">
+            </form> -->
+            <!-- <form id="disconnect" method="POST" action="#">
+                <input type="submit" value="Disconnect">
+            </form> -->
+        </div>
+        <!-- <h2>Receive:</h2>
+        <div id="log"></div> -->
+
+        
+        <div id="room_leaderboard">
+            <h2>Leaderboard:</h2>
+        </div>
+
     </div>
-    <!-- <h2>Receive:</h2>
-    <div id="log"></div> -->
-    <h2>Leaderboard:</h2>
-    <div id="room_leaderboard"></div>
-    <h2>Room Details:</h2>
-    <div id="room_stats"></div>
-    <h2>Question:</h2>
-    <div id="question_zone"></div>
+
+    <!-- <h2>Room Details:</h2> -->
+    
+    <div id="questions">
+        <div id="question_zone">
+            <h2>Question:</h2>
+        </div>
+        <div id="room_stats"></div>
+        <div id="answer_zone"></div>
+    </div>
 </body>
 </html>

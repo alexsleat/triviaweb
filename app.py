@@ -27,6 +27,18 @@ room_thread = [ ]
 
 threads_dict = {}
 
+def countdown_timer(room, quiz_timer, count_type):
+
+    for i in range(quiz_timer):
+        print("Time left: ", str(quiz_timer - i))
+        data_string = [count_type, quiz_timer - i, quiz_timer]
+        convert_and_send_json(room, 'my_countdown', {'data': data_string})
+        
+        socketio.sleep(1)
+
+    data_string = [count_type, 0, quiz_timer]
+    convert_and_send_json(room, 'my_countdown', {'data': data_string})
+
 def add_user_to_room(room, username, publish=True):
 
     threads_dict[room]["points"][username] = 0
@@ -138,12 +150,7 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             
             #############################################
             # Send the countdown
-            for i in range(quiz_timer):
-                print("Time left: ", str(quiz_timer - i))
-                data_string = ["time_left", str(quiz_timer - i)]
-                convert_and_send_json(room, 'my_countdown', {'data': data_string})
-                
-                socketio.sleep(1)
+            countdown_timer(room, quiz_timer, "question_countdown")
             
             #############################################
             # Send the answer and scoreboard
@@ -169,7 +176,7 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             ##### Send everyones points in leaderboard
 
             convert_and_send_json(room, 'my_leaderboard', {'data': threads_dict[room]["points"]})
-            socketio.sleep(quiz_timer)
+            countdown_timer(room, quiz_timer, "next_question")
 
     #### When no 
     # else:
