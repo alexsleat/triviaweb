@@ -115,13 +115,13 @@
                 msg_json = JSON.parse(msg.data);
 
                 //$('#question_zone').text("");
-                $('#room_stats').text("");
+                $('#room_leaderboard').text("");
                 text = "";
                 for (const [key, value] of Object.entries(msg_json)) {
                     text += key + " : " + value + "<br>";
                 }
                 text += "<br>";
-                $('#room_stats').append(text);
+                $('#room_leaderboard').text(text);
 
             });
 
@@ -252,6 +252,8 @@
     </div>
     <!-- <h2>Receive:</h2>
     <div id="log"></div> -->
+    <h2>Leaderboard:</h2>
+    <div id="room_leaderboard"></div>
     <h2>Room Details:</h2>
     <div id="room_stats"></div>
     <h2>Question:</h2>

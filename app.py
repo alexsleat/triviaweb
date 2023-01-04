@@ -26,6 +26,41 @@ room_thread = [ ]
 
 threads_dict = {}
 
+def add_user_to_room(room, username, publish=True):
+
+    threads_dict[room]["points"][username] = 0
+    # 
+    if(publish):
+        convert_and_send_json(room, 'my_leaderboard', {'data': threads_dict[room]["points"]})
+
+def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10):
+
+    global threads_dict
+
+    ## Check if room already exists:
+    if room in threads_dict.keys():
+        print("Room already created")
+        if threads_dict[room]["running"]:
+            print("Room already running")
+    else:
+
+        threads_dict[room] = {}
+        threads_dict[room]["queue"] = Queue
+        threads_dict[room]["answers"] = {}
+        threads_dict[room]["points"] = { }
+
+        if(running):
+            threads_dict[room]["running"] = True
+            print(threads_dict)
+            threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+
+        else:
+            threads_dict[room]["running"] = False
+            print(threads_dict)
+
+
+
+
 def convert_to_json(input_list):
 
     json_string = json.dumps(input_list, separators=(',', ':'))
@@ -232,20 +267,29 @@ def test_disconnect():
 
 @socketio.event
 def name_join(message):
-    print(message["username"] + " is Joining Room " + message["room"])
+
+    username = message["username"]
+    room = message["room"]
+    print(username + " is Joining Room " + room)
 
     print("Currently in: ", rooms())
     for i in rooms():
         print("Leaving: ", i)
         leave_room(i)
 
-    join_room(message['room'])
+    join_room(room)
     print("Now in: ", rooms())
 
     session['receive_count'] = session.get('receive_count', 0) + 1
-    emit('my_response',
-         {'data': 'In rooms: ' + ', '.join(rooms()),
-          'count': session['receive_count']})
+    # emit('my_response',
+    #      {'data': 'In rooms: ' + ', '.join(rooms()),
+    #       'count': session['receive_count']})
+
+
+    ## Check if room already exists:
+    update_room_list(room, False)
+    add_user_to_room(room, username)
+
 
 @socketio.event
 def start_room(message):
@@ -261,21 +305,8 @@ def start_room(message):
 
     global threads_dict
     ## Check if room already exists:
-    if room in threads_dict.keys() and threads_dict[room]["running"]:
-        print("Room already running")
-    else:
+    update_room_list(room, True, quiz_flag, 10)
 
-        print("THREAD CREATED: ::: : : ")
-        threads_dict[room] = {}
-        threads_dict[room]["queue"] = Queue
-        threads_dict[room]["answers"] = {}
-        threads_dict[room]["points"] = { }
-        threads_dict[room]["running"] = True
-
-        print(threads_dict)
-
-        threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, 10) )
-        
     
 
 @socketio.event
