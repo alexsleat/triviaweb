@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>Trivia Game</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> 
     <link rel="stylesheet" href="{{ url_for('static', filename='triviastyle.css') }}">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.min.js" integrity="sha512-bLT0Qm9VnAYZDflyKcBaQ2gg0hSYNQrJ8RilYldYQ1FxQYoCLtUjuuRuZo+fjqhx/qtq/1itJ0C2ejDxltZVFg==" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>
@@ -35,6 +36,7 @@
             // The connection URL has the following format, relative to the current page:
             //     http[s]://<domain>:<port>[/<namespace>]
             var socket = io();
+            //var socket = io('http://192.168.1.140:5000');
 
             var username = getCookie("username");
             var room = getCookie("room");
@@ -76,7 +78,8 @@
                 // ans = "<div id='question'> Question : " + q[2] + "</div>";
                 ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
-                    ans += "<input type='button' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
+                    var short_id_name = q[3][i].replace(/[^A-Z0-9]/ig, "");
+                    ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
                 }
                 ans += "</form>";
 
@@ -86,14 +89,25 @@
                 // Handle answer buttons, emit the answer to the room
                 $('input:button').click(function(event) {
                     var btnValue = $(this).val();
+                    var element = this; // adding the current object in a variable
 
                     // Send Answer
                     socket.emit('my_answer', {room: $('#join_room').val(),
                                             username: $('#username').val(), 
                                             answer: btnValue });
                     // Change Buttons:
-                    ans = "<div id='selected_answer'>" + btnValue + "</div>";
-                    $('#answer_zone').html(ans);
+                    //ans = "<div id='selected_answer'>" + btnValue + "</div>";
+                    //$('#answer_zone').html(ans);
+
+                    // Remove any other selected answers, in case they be doing that.
+                    var all_ans_seletected = document.getElementsByClassName('ans_selected');
+
+                    for (var i = 0; i < all_ans_seletected.length; i++) {
+                        all_ans_seletected[0].classList.add("ans");
+                        all_ans_seletected[0].classList.remove("ans_selected");
+                    }
+
+                    $(element).removeClass("ans").addClass("ans_selected");
 
                     return false;
                 });
@@ -112,9 +126,13 @@
                 //     text += key + value + "<br>";
                 // }
 
-                text = "<div id='question'> " + msg_json[0] + "</div> : <div id='selected_answer'>" + msg_json[1] + "</div>";
-                text += "<br>";
-                $('#answer_zone').html(text);
+                // text = "<div id='question'> " + msg_json[0] + "</div> : <div id='selected_answer'>" + msg_json[1] + "</div>";
+                // text += "<br>";
+                // $('#answer_zone').html(text);
+                var short_id_name = msg_json[1].replace(/[^A-Z0-9]/ig, "");
+                var element = document.getElementById("ans_" +short_id_name);
+                console.log(short_id_name);
+                $(element).addClass("ans_correct");
 
             });
 
@@ -192,13 +210,13 @@
             // });
             $('form#name_join').submit(function(event) {
                 socket.emit('name_join', {username: $('#username').val(), room: $('#join_room').val()});
-                $('#start_room_button').attr("value", room);
+                // $('#start_room_button').attr("value", room);
                 setCookie("username", $('#username').val(), 1);
                 setCookie("room", $('#join_room').val(), 1);
                 return false;
             });
             $('form#start_room').submit(function(event) {
-                socket.emit('start_room', {room: $('#start_room_button').val(), numofq: $('#question_num').val()});
+                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val()});
                 return false;
             });
             $('form#leave').submit(function(event) {
@@ -228,48 +246,46 @@
       Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
     </p> -->
     <div id="top_row">
-        <div id="menu">
+        <div id="menu" class="menubar">
             <h2>Menu:</h2>
-            <!-- <form id="emit" method="POST" action='#'>
-                <input type="text" name="emit_data" id="emit_data" placeholder="Message">
-                <input type="submit" value="Echo">
-            </form>
-            <form id="broadcast" method="POST" action='#'>
-                <input type="text" name="broadcast_data" id="broadcast_data" placeholder="Message">
-                <input type="submit" value="Broadcast">
-            </form> -->
+
             <form id="name_join" method="POST" action='#'>
-                <input type="text" name="username" id="username" value="Name">
-                <input type="text" name="join_room" id="join_room" value="Room Name">
-                <input type="submit" value="Join Room">
+                <div class="row rowl">
+                    <div class="col-25">
+                        <label for="fname">Your<br>Name</label>
+                    </div>
+                    <div class="col-75">
+                        <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
+                    </div>
+                </div>
+                <div class="row rowd">
+                    <div class="col-25">
+                        <label for="fname">Room<br>Name</label>
+                    </div>
+                    <div class="col-75">
+                        <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
+                    </div>
+                </div>
+                <input class="menu_submit" type="submit" value="Join Room">
             </form>
             <form id="start_room" method="POST" action='#'>
-                <input type="text" name="start_room_button" id="start_room_button" value="Room Name" placeholder="Room Name" disabled>
-                <input type="text" name="question_num" id="question_num" value="5">
-                <input type="submit" value="Start Quiz">
+                <div class="row rowl">
+                    <div class="col-25">
+                        <label for="fname">No. of<br>Questions</label>
+                    </div>
+                    <div class="col-75">
+                        <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
+                    </div>
+                </div>
+                <input class="menu_submit" type="submit" value="Start Quiz">
             </form>
-            <!-- <form id="leave" method="POST" action='#'>
-                <input type="text" name="leave_room" id="leave_room" placeholder="Room Name">
-                <input type="submit" value="Leave Room">
-            </form> -->
-            <!-- <form id="send_room" method="POST" action='#'>
-                <input type="text" name="room_name" id="room_name" placeholder="Room Name">
-                <input type="text" name="room_data" id="room_data" placeholder="Message">
-                <input type="submit" value="Send to Room">
-            </form> -->
-            <!-- <form id="close" method="POST" action="#">
-                <input type="text" name="close_room" id="close_room" placeholder="Room Name">
-                <input type="submit" value="Close Room">
-            </form> -->
-            <!-- <form id="disconnect" method="POST" action="#">
-                <input type="submit" value="Disconnect">
-            </form> -->
+
         </div>
         <!-- <h2>Receive:</h2>
         <div id="log"></div> -->
 
         
-        <div id="room_leaderboard">
+        <div id="room_leaderboard" class="menubar">
             <h2>Leaderboard:</h2>
         </div>
 

@@ -10,13 +10,73 @@ body {
 
 #menu {
     display: block;
-    width: 50%;
+    width: 46%;
     float: left;
+    margin: 0%;
+    padding:2%;
+    
 }
 
-#room_leaderboard{
-    width: 50%;
+input[type=text] {
+  width: 100%;
+  padding: 12px 20px;
+  margin: 8px 0;
+  box-sizing: border-box;
+}
+
+.col-25 {
     float: left;
+    width: 23%;
+    margin-top: 6px;
+    margin-left: 1%;
+  }
+
+.col-75 {
+    float: left;
+    width: 75%;
+    margin-top: 6px;
+}
+
+.rowl {
+    background-color: #fbace7;
+}
+.rowd {
+    background-color: #f665d2;
+}
+/* Clear floats after the columns */
+.row:after {
+    content: "";
+    display: table;
+    clear: both;
+}
+
+.menu_submit {
+    background-color: #2ad4a4; /* Green */
+    border: none;
+    color: rgb(0, 0, 0);
+    padding: 5%;
+    margin: 2%;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+    width: 96%;
+}
+  
+  /* Responsive layout - when the screen is less than 600px wide, make the two columns stack on top of each other instead of next to each other */
+  @media screen and (max-width: 300px) {
+    .col-25, .col-75, input[type=submit] {
+      width: 100%;
+      margin-top: 0;
+    }
+  }
+
+#room_leaderboard{
+    width: 46%;
+    float: left;
+    margin: 0%;
+    padding:2%;
     background-color: #f984dc; /* Green */
     border: 1px;
     border-color: #a7d42a;
@@ -27,8 +87,21 @@ body {
     font-weight: bold;
 }
 
+@media only screen and (max-width: 768px) {
+    #menu{
+        width: 96%;
+        display: inline-block;
+    }
+    #room_leaderboard{
+        width: 96%;
+        display: inline-block;
+    }
+}
+
 #questions{
-    width:100%;
+    width:96%;
+    margin:0%;
+    padding:2%;
     display: inline-block;
 }
 
@@ -57,9 +130,35 @@ body {
     font-weight: bold;
 }
 
-#ans input[type=button]{
+.ans{
     background-color: #a7d42a; /* Green */
     border: none;
+    color: rgb(0, 0, 0);
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.ans_selected{
+    background-color: #a7d42a; /* Green */
+    /* border: 2px; */
+    border-color: #8b1b2c;
+    color: rgb(0, 0, 0);
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.ans_correct{
+    background-color: #2ad432; /* Green */
     color: rgb(0, 0, 0);
     padding: 15px 32px;
     margin: 10px;
