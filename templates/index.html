@@ -40,6 +40,7 @@
 
             var username = getCookie("username");
             var room = getCookie("room");
+            // $("#room_menu-button").toggle();
 
             if(room != null){
                 $('#join_room').attr("value", room);
@@ -57,9 +58,11 @@
             // $(".menubar").show();
 
             $('.menu-toggler').click(function() {
-
                 $("#menu").toggle();
-
+            });
+            $('.room_menu-toggler').click(function() {
+                $("#room_menu").toggle();
+                // $("#room_menu-button").toggle();
             });
 
             // Event handler for new connections.
@@ -98,12 +101,12 @@
             socket.on('my_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
 
-                que = "<div id='question'> <h2>Question : " + q[2] + "</h2> </div>";
+                que = "<div id='question'> <h2>" + q[2] + "</h2> </div>";
                 // ans = "<div id='question'> Question : " + q[2] + "</div>";
                 ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
                     var short_id_name = q[3][i].replace(/[^A-Z0-9]/ig, "");
-                    ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + q[3][i] + "' name='" + q[3][i] + "' >";
+                    ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + q[3][i] + "' name='" + q[3][i] + "' > <br>";
                 }
                 ans += "</form>";
 
@@ -187,7 +190,7 @@
 
                 msg_json = JSON.parse(msg.data);
 
-                text = "<h2>Leaderboard:</h2>";
+                text = "<h2>" + username + " in " + room + "</h2><i>Leaderboard:</i> <br><br>";
                 for (const [key, value] of Object.entries(msg_json)) {
                     text += key + " : " + value + "<br>";
                 }
@@ -259,6 +262,9 @@
                 // $('#start_room_button').attr("value", room);
                 setCookie("username", $('#username').val(), 1);
                 setCookie("room", $('#join_room').val(), 1);
+
+                $("#room_menu").toggle();
+                // $("#room_menu-button").toggle();
                 return false;
             });
             $('form#start_room').submit(function(event) {
@@ -309,38 +315,60 @@
         
         <div id="menu" class="menubar">
             <h2>Menu:</h2>
-
-            <form id="name_join" method="POST" action='#'>
-                <div class="row rowl">
-                    <div class="col-25">
-                        <label for="fname">Your<br>Name</label>
-                    </div>
-                    <div class="col-75">
-                        <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
+            <div class="row">
+                <div id="room_menu-button" class="col-25">
+                    <a href="#" class="room_menu-toggler">
+                        <img width="48px" height="auto" alt="Change User or Room" src="/static/change_room.png">
+                    </a>
+                </div>
+                <div class="col-75">
+                    <div id="room_menu" >
+                        <form id="name_join" method="POST" action='#'>
+                            <div class="row rowl">
+                                <div class="col-25">
+                                    <label for="fname">Your<br>Name</label>
+                                </div>
+                                <div class="col-75">
+                                    <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
+                                </div>
+                            </div>
+                            <div class="row rowd">
+                                <div class="col-25">
+                                    <label for="fname">Room<br>Name</label>
+                                </div>
+                                <div class="col-75">
+                                    <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
+                                </div>
+                            </div>
+                            <input class="menu_submit" type="submit" value="Join Room">
+                        </form>
                     </div>
                 </div>
-                <div class="row rowd">
-                    <div class="col-25">
-                        <label for="fname">Room<br>Name</label>
-                    </div>
-                    <div class="col-75">
-                        <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
+            </div> 
+            <!-- ROW Break -->
+            <div class="row">
+                <div id="question_menu-button" class="col-25">
+                    <a href="#" class="question_menu-toggler">
+                        <img width="48px" height="auto" alt="Set number of Questions" src="/static/questions.png">
+                    </a>
+                </div>
+                <div class="col-75">
+                    <div id="question_menu">
+                        <form id="start_room" method="POST" action='#'>
+                            <div class="row rowl">
+                                <div class="col-25">
+                                    <label for="fname">No. of<br>Questions</label>
+                                </div>
+                                <div class="col-75">
+                                    <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
+                                </div>
+                            </div>
+                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
+                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
+                        </form>
                     </div>
                 </div>
-                <input class="menu_submit" type="submit" value="Join Room">
-            </form>
-            <form id="start_room" method="POST" action='#'>
-                <div class="row rowl">
-                    <div class="col-25">
-                        <label for="fname">No. of<br>Questions</label>
-                    </div>
-                    <div class="col-75">
-                        <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
-                    </div>
-                </div>
-                <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
-                <input class="menu_submit" type="submit" name="liar" value="Start Liar">
-            </form>
+            </div>
 
         </div>
         <!-- <h2>Receive:</h2>

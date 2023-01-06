@@ -228,7 +228,7 @@ def room_liar_thread(room, quiz_flag, quiz_timer):
 
     global threads_dict
 
-    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
+    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag) + "&type=multiple"
     QUESTIONS = None
 
     WRITE_ANSWER_WEIGHT = 3
@@ -276,11 +276,15 @@ def room_liar_thread(room, quiz_flag, quiz_timer):
 
             answers = QUESTIONS[count]["incorrect_answers"]
 
+            ## Generate the answers based on user submitted ones, make sure to keep at least 1 lie, 1 true:
+            keep_first_cpu_lie = False
             for username, lie in threads_dict[room]["liar_answers"].items():
-                answers.pop(0)
+                if(keep_first_cpu_lie):
+                    answers.pop(0)
+                keep_first_cpu_lie = True
                 answers.append(lie)
             
-            answers.insert(0, correct_answer )
+            answers.insert(0, correct_answer )  # Makes sure correct answer is included
             random.shuffle(answers)
 
             question_l = ["Q"+str(count), "text_question", current_question, answers]
