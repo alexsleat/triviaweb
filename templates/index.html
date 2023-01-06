@@ -53,6 +53,15 @@
             }
             
 
+            // $(".menubar").hide();
+            // $(".menubar").show();
+
+            $('.menu-toggler').click(function() {
+
+                $("#menu").toggle();
+
+            });
+
             // Event handler for new connections.
             // The callback function is invoked when a connection with the
             // server is established.
@@ -68,6 +77,21 @@
                 $('#log').append('<br>' + $('<div/>').text('Received #' + msg.count + ': ' + msg.data).html());
                 if (cb)
                     cb();
+            });
+
+            socket.on('my_start', function(msg, cb) {
+                d = JSON.parse(msg.data);
+
+                // Hide menu for players in the room:
+                $("#menu").hide();
+
+                if(d[0] == "popup"){
+                    $("#game_splash_screen").show();
+                }
+                else if(d[0] == "start"){
+                    $("#game_splash_screen").hide();
+                }
+                $("#menu").hide();
             });
 
             // Question handler
@@ -95,9 +119,6 @@
                     socket.emit('my_answer', {room: $('#join_room').val(),
                                             username: $('#username').val(), 
                                             answer: btnValue });
-                    // Change Buttons:
-                    //ans = "<div id='selected_answer'>" + btnValue + "</div>";
-                    //$('#answer_zone').html(ans);
 
                     // Remove any other selected answers, in case they be doing that.
                     var all_ans_seletected = document.getElementsByClassName('ans_selected');
@@ -121,19 +142,44 @@
 
                 msg_json = JSON.parse(msg.data);
 
-                // text = "";
-                // for (const [key, value] of Object.entries(msg_json)) {
-                //     text += key + value + "<br>";
-                // }
-
-                // text = "<div id='question'> " + msg_json[0] + "</div> : <div id='selected_answer'>" + msg_json[1] + "</div>";
-                // text += "<br>";
-                // $('#answer_zone').html(text);
                 var short_id_name = msg_json[1].replace(/[^A-Z0-9]/ig, "");
                 var element = document.getElementById("ans_" +short_id_name);
                 console.log(short_id_name);
                 $(element).addClass("ans_correct");
 
+            });
+
+            // Question handler
+            socket.on('my_liar_question', function(msg, cb) {
+                q = JSON.parse(msg.data);
+
+                que = "<div id='question'> <h2>Question : " + q[2] + "</h2> </div>";
+                // ans = "<div id='question'> Question : " + q[2] + "</div>";
+                ans = "<form id='liar_ans' method='POST' action='#'>";
+                ans += "<input type='text' class='lie_input' id='user_lie' placeholder='Write your fake answer here!' name='user_lie' >";
+                ans += "<input class='menu_submit' id='lie_submit' type='submit' value='Submit Lie'>"
+                ans += "</form>";
+
+                $('#question_zone').html(que);
+                $('#answer_zone').html(ans);
+
+                // Handle answer buttons, emit the answer to the room
+                $('form#liar_ans').submit(function(event) {
+                    var btnValue = $("#user_lie").val();
+
+                    // Send Answer
+                    socket.emit('my_liar_answer', {room: $('#join_room').val(),
+                                            username: $('#username').val(), 
+                                            answer: btnValue });
+                    // Disable submit:
+                    $('#lie_submit').attr("disabled", true);
+                    $('#user_lie').attr("disabled", true);
+
+                    return false;
+                });
+
+                if (cb)
+                    cb();
             });
 
             // Leaderboard handler
@@ -216,7 +262,10 @@
                 return false;
             });
             $('form#start_room').submit(function(event) {
-                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val()});
+                var gametypeval = $(this).val();
+                var gametypeval = document.activeElement.getAttribute('name');
+
+                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val(), gametype: gametypeval});
                 return false;
             });
             $('form#leave').submit(function(event) {
@@ -239,13 +288,25 @@
     </script>
 </head>
 <body>
-    <h1>Trivia</h1>
+    
     <!-- <p>
       Async mode is: <b>{{ async_mode }}</b><br>
       Current transport is: <b><span id="transport"></span></b><br>
       Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
     </p> -->
+    <div id="header" class="row">
+        <div id="title" class="col-75">
+            <h1>Let's get quizzic<b>AL(EX)</b>!</h1>
+        </div>
+        <div id="menu-button" class="col-25">
+            <a href="#" class="menu-toggler">
+                <img src="/static/menu.png">
+            </a>
+        </div>
+    </div>
+    
     <div id="top_row">
+        
         <div id="menu" class="menubar">
             <h2>Menu:</h2>
 
@@ -277,7 +338,8 @@
                         <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
                     </div>
                 </div>
-                <input class="menu_submit" type="submit" value="Start Quiz">
+                <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
+                <input class="menu_submit" type="submit" name="liar" value="Start Liar">
             </form>
 
         </div>
@@ -300,5 +362,13 @@
         <div id="room_stats"></div>
         <div id="answer_zone"></div>
     </div>
+
+    <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">
+        
+        You may put any HTML here. This is dummy copy. It is not meant to be read. 
+        It has been placed here solely to demonstrate the look and feel of finished, typeset text. 
+        Only for show. He who searches for meaning here will be sorely disappointed.
+
+    </div> -->
 </body>
 </html>

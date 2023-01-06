@@ -23,9 +23,12 @@ thread_lock = Lock()
 
 h = HTMLParser()
 
-room_thread = [ ]
-
 threads_dict = {}
+
+#############################################
+#
+#   input: (str) room, (int) quiz_timer, (int) count_type
+# 
 
 def countdown_timer(room, quiz_timer, count_type):
 
@@ -39,6 +42,11 @@ def countdown_timer(room, quiz_timer, count_type):
     data_string = [count_type, 0, quiz_timer]
     convert_and_send_json(room, 'my_countdown', {'data': data_string})
 
+#############################################
+#
+#   input: (str) room, (str) username, (bool) publish
+# 
+
 def add_user_to_room(room, username, publish=True):
 
     threads_dict[room]["points"][username] = 0
@@ -46,43 +54,65 @@ def add_user_to_room(room, username, publish=True):
     if(publish):
         convert_and_send_json(room, 'my_leaderboard', {'data': threads_dict[room]["points"]})
 
-def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10):
+#############################################
+#
+#   input: (str) room, (bool) running, (int) quiz_flag, (int) quiz_timer
+# 
+def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, gametype="quiz"):
 
     global threads_dict
 
     ## Check if room already exists:
     if room in threads_dict.keys():
         print("Room already created")
+
+        ## Check if the room is already running:
         if threads_dict[room]["running"]:
             print("Room already running")
+            ## Check if the upate wants the room to stop:
+            if(running == False):
+                print("Stopping the room..")
+                threads_dict[room]["running"] = False
+        ## If it's not running, set it to the status of the arg:
         else:
             if(running):
                 threads_dict[room]["running"] = True
+                threads_dict[room]["gametype"] = gametype
                 print(threads_dict)
-                threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+                if(gametype=="quiz"):
+                    threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+                elif(gametype=="liar"):
+                    threads_dict[room]["thread"] = socketio.start_background_task( room_liar_thread(room, quiz_flag, quiz_timer) )
 
             else:
                 threads_dict[room]["running"] = False
                 print(threads_dict)
-    else:
 
+    ## If the room doesn't exist - make it.
+    else:
         threads_dict[room] = {}
         threads_dict[room]["queue"] = Queue
         threads_dict[room]["answers"] = {}
         threads_dict[room]["points"] = { }
+        threads_dict[room]["liar_answers"] = {}
+        threads_dict[room]["running"] = running
+        threads_dict[room]["gametype"] = ""
 
-        if(running):
-            threads_dict[room]["running"] = True
-            print(threads_dict)
-            threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+        # ## If it's set to run, spawn it:
+        # if(running):
+        #     threads_dict[room]["running"] = True
+        #     print(threads_dict)
+        #     #threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+        #     threads_dict[room]["thread"] = socketio.start_background_task( room_liar_thread(room, quiz_flag, quiz_timer) )
+        # ## Otherwise just make it, no spawning:
+        # else:
+        #     threads_dict[room]["running"] = False
+        #     print(threads_dict)
 
-        else:
-            threads_dict[room]["running"] = False
-            print(threads_dict)
-
-
-
-
+#############################################
+#
+#   input: list to turn in to json for the server
+# 
 def convert_to_json(input_list):
 
     json_string = json.dumps(input_list, separators=(',', ':'))
@@ -110,7 +140,6 @@ def convert_and_send_json(room, broadcast_title, input_dict):
 #
 #################################################
 def room_quiz_thread(room, quiz_flag, quiz_timer):
-    """Example of how to send server generated events to clients."""
     print("QUIZ TIME")
 
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
@@ -129,6 +158,10 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
     count = 0
     ### Check if there is questions in the list
     if quiz_flag: 
+
+        start_l = ["start"]
+        convert_and_send_json(room, 'my_start', {'data': start_l, 'count': count})
+
         for i in range(quiz_flag):
             count = i
             if count >= len(QUESTIONS):
@@ -160,7 +193,7 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
             data_string = ["The correct answer was ", correct_answer]
             convert_and_send_json(room, 'my_question_answer', {'data': data_string})
 
-            global room_thread
+            global threads_dict
             for username, answer in threads_dict[room]["answers"].items():
 
                 correct =  True if answer == correct_answer else False
@@ -186,7 +219,113 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
 
     threads_dict[room]["running"] = False
 
-        
+###############################################
+# MAIN Thread, spun off when a room starts a game
+#
+#################################################
+def room_liar_thread(room, quiz_flag, quiz_timer):
+    print("LIAR TIME")
+
+    global threads_dict
+
+    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
+    QUESTIONS = None
+
+    WRITE_ANSWER_WEIGHT = 3
+
+    current_question = ""
+    correct_answer = ""
+
+    ## Load the questions from opentdb:
+    with urllib.request.urlopen(QUESTION_URL) as url:
+        data = json.load(url)
+        QUESTIONS = data["results"]
+
+    count = 0
+    ### Check if there is questions in the list
+    if quiz_flag: 
+
+        start_l = ["start", "liar"]
+        convert_and_send_json(room, 'my_start', {'data': start_l, 'count': count})
+
+        ## Loop for all the questions:
+        for i in range(quiz_flag):
+            count = i
+            ## Loop questions, in case of a problem, shouldn't be needed tho.
+            if count >= len(QUESTIONS):
+                count = 0
+
+            #############################################
+            # Send the questions
+            print("QUESTION ::: ", QUESTIONS[count])
+
+            current_question = QUESTIONS[count]["question"]
+            correct_answer = QUESTIONS[count]["correct_answer"]
+
+            ### Clear the liar answers:
+            threads_dict[room]["liar_answers"] = {}
+            
+            question_l = ["Q"+str(count), "text_question", current_question, ["liar"]]
+            convert_and_send_json(room, 'my_liar_question', {'data': question_l, 'count': count})
+            
+            ## Send the countdown and wait for user answers
+            countdown_timer(room, quiz_timer * WRITE_ANSWER_WEIGHT, "question_countdown")
+
+            #############################################
+            # Present the user submitted answers:
+
+            answers = QUESTIONS[count]["incorrect_answers"]
+
+            for username, lie in threads_dict[room]["liar_answers"].items():
+                answers.pop(0)
+                answers.append(lie)
+            
+            answers.insert(0, correct_answer )
+            random.shuffle(answers)
+
+            question_l = ["Q"+str(count), "text_question", current_question, answers]
+            convert_and_send_json(room, 'my_question', {'data': question_l, 'count': count})
+            
+            # Send the countdown 
+            countdown_timer(room, quiz_timer, "question_countdown")
+            
+            #############################################
+            # Send the answer and scoreboard
+            print("ANSWER TIME")
+            #### Send Real Answer and if they were correct:
+
+            data_string = ["The correct answer was ", correct_answer]
+            convert_and_send_json(room, 'my_question_answer', {'data': data_string})
+
+            for username, answer in threads_dict[room]["answers"].items():
+
+                ## Calculate points for getting the correct answer:
+                correct =  True if answer == correct_answer else False
+                if(correct):
+                    threads_dict[room]["points"][username] = threads_dict[room]["points"][username] + 10
+
+                ## Calculate points for someone picking the lie:
+                else:
+                    for liar, lie in threads_dict[room]["liar_answers"].items():
+                        if answer == lie and liar != username:
+                            threads_dict[room]["points"][liar] = threads_dict[room]["points"][username] + 100
+
+                print("USER: ", username, " ANSWERED: ", answer, correct)
+
+
+            ##### Send everyones points in leaderboard
+
+            convert_and_send_json(room, 'my_leaderboard', {'data': threads_dict[room]["points"]})
+            countdown_timer(room, quiz_timer, "next_question")
+
+    #### When no 
+    # else:
+    #     socketio.emit('my_question',
+    #                 {'data': "", 'count': -1},
+    #                     to="hello_world")#
+
+    threads_dict[room]["running"] = False
+
 
 @app.route('/')
 def index():
@@ -305,17 +444,16 @@ def start_room(message):
     print(message)
     room = message["room"]
     numofq =  message["numofq"]
+    room_type = message["gametype"]
     print(room + " is starting with " + numofq + " questions")
 
     quiz_flag = int(numofq)
 
-    global room_thread
-    print(room_thread)
-
     global threads_dict
-    ## Check if room already exists:
-    update_room_list(room, True, quiz_flag, 10)
+    print(threads_dict)
 
+    ## Check if room already exists:
+    update_room_list(room, True, quiz_flag, 10, room_type)
     
 
 @socketio.event
@@ -327,9 +465,20 @@ def my_answer(message):
 
     print(message["username"] + " of " + message["room"] + " answered ", message["answer"]) 
 
-    global room_thread
+    global threads_dict
     threads_dict[room]["answers"][username] = answer
 
+@socketio.event
+def my_liar_answer(message):
+
+    room = message["room"]
+    username = message["username"]
+    answer = message["answer"]
+
+    print(message["username"] + " of " + message["room"] + " answered ", message["answer"]) 
+
+    global threads_dict
+    threads_dict[room]["liar_answers"][username] = answer
 
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=5000)

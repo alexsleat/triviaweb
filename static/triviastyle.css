@@ -1,5 +1,22 @@
+
+
+.unused{
+    color: #F5B598; 
+    color: #3097CD; 
+    color: #FF9831; 
+    color: #4554C2; 
+    color: #EAEADF; 
+    color: #FA8AB2; 
+    color: #1E190A; 
+    color: #64C32C; 
+    color: #FFE56C; 
+    color: #E55A46;
+}
+
+
 body {
-    background-color: rgb(215, 152, 245);
+    background-color: #4554C2;
+    color: #1E190A;
 }
 
 #top_row{
@@ -8,6 +25,9 @@ body {
     display: inline-block;
 }
 
+#menu-button{
+    text-align: right;
+}
 #menu {
     display: block;
     width: 46%;
@@ -38,10 +58,10 @@ input[type=text] {
 }
 
 .rowl {
-    background-color: #fbace7;
+    background-color: #FFE56C;
 }
 .rowd {
-    background-color: #f665d2;
+    background-color: #FF9831;
 }
 /* Clear floats after the columns */
 .row:after {
@@ -53,7 +73,21 @@ input[type=text] {
 .menu_submit {
     background-color: #2ad4a4; /* Green */
     border: none;
-    color: rgb(0, 0, 0);
+    color: #1E190A;
+    padding: 5%;
+    margin: 2%;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+    width: 96%;
+}
+
+.menu_submit:disabled {
+    background-color: #748781; /* Green */
+    border: none;
+    color: #1E190A;
     padding: 5%;
     margin: 2%;
     text-align: center;
@@ -105,17 +139,22 @@ input[type=text] {
     display: inline-block;
 }
 
+#question_zone{
+    background-color: #EAEADF; 
+    padding: 5%;
+}
+
 #selected_answer{
     font-weight: bold;
 }
 
 
 .loading-bar-bg{
-    background-color: rgb(166, 122, 248);
+    background-color: #FFE56C; 
     height: 30px;
 }
 .loading-bar-bar{
-    background-color: rgb(76, 108, 248);
+    background-color: #E55A46;
     margin: 5px;
 }
 
@@ -131,9 +170,9 @@ input[type=text] {
 }
 
 .ans{
-    background-color: #a7d42a; /* Green */
+    background-color: #2ad4a4; /* Green */
     border: none;
-    color: rgb(0, 0, 0);
+    color: #1E190A;
     padding: 15px 32px;
     margin: 10px;
     text-align: center;
@@ -144,10 +183,11 @@ input[type=text] {
 }
 
 .ans_selected{
-    background-color: #a7d42a; /* Green */
+    background-color: #2ad4a4; /* Green */
     /* border: 2px; */
-    border-color: #8b1b2c;
-    color: rgb(0, 0, 0);
+    border-width: 5px;
+    border-color: #FA8AB2;
+    color: #1E190A;
     padding: 15px 32px;
     margin: 10px;
     text-align: center;
@@ -158,8 +198,8 @@ input[type=text] {
 }
 
 .ans_correct{
-    background-color: #2ad432; /* Green */
-    color: rgb(0, 0, 0);
+    background-color: #FFE56C; 
+    color: #1E190A;
     padding: 15px 32px;
     margin: 10px;
     text-align: center;
@@ -168,3 +208,30 @@ input[type=text] {
     font-size: 16px;
     font-weight: bold;
 }
+
+.lie_input{
+    background-color: #EAEADF; /* Green */
+    border: none;
+    color: #1E190A;
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+}
+
+.lie_input:disabled{
+    background-color: #3d3e3e; /* Green */
+    border: none;
+    color: #d4caad;
+    padding: 15px 32px;
+    margin: 10px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    font-weight: bold;
+}
+
