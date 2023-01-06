@@ -156,7 +156,7 @@
             socket.on('my_liar_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
 
-                que = "<div id='question'> <h2>Question : " + q[2] + "</h2> </div>";
+                que = "<div id='question'> <h2>" + q[2] + "</h2> </div>";
                 // ans = "<div id='question'> Question : " + q[2] + "</div>";
                 ans = "<form id='liar_ans' method='POST' action='#'>";
                 ans += "<input type='text' class='lie_input' id='user_lie' placeholder='Write your fake answer here!' name='user_lie' >";
@@ -189,10 +189,15 @@
             socket.on('my_leaderboard', function(msg, cb) {
 
                 msg_json = JSON.parse(msg.data);
+                console.log(msg_json);
 
-                text = "<h2>" + username + " in " + room + "</h2><i>Leaderboard:</i> <br><br>";
+                // Sort json data based on points:
+                // msg_json.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+
+                // text = "<h3>" + username + " in " + room + "</h3><i>Leaderboard:</i> <br><br>";
+                text = "";
                 for (const [key, value] of Object.entries(msg_json)) {
-                    text += key + " : " + value + "<br>";
+                    text += "<b>" + key + "</b> : " + value + "<br>";
                 }
                 text += "<br>";
                 $('#room_leaderboard').html(text);
@@ -300,7 +305,7 @@
       Current transport is: <b><span id="transport"></span></b><br>
       Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
     </p> -->
-    <div id="header" class="row">
+    <div id="header" class="row header">
         <div id="title" class="col-75">
             <h1>Let's get quizzic<b>AL(EX)</b>!</h1>
         </div>
@@ -314,7 +319,7 @@
     <div id="top_row">
         
         <div id="menu" class="menubar">
-            <h2>Menu:</h2>
+            <h3>Menu:</h3>
             <div class="row">
                 <div id="room_menu-button" class="col-25">
                     <a href="#" class="room_menu-toggler">
@@ -374,21 +379,21 @@
         <!-- <h2>Receive:</h2>
         <div id="log"></div> -->
 
-        
-        <div id="room_leaderboard" class="menubar">
-            <h2>Leaderboard:</h2>
+        <div id="leaderboard_handler">
+            <h3>Leaderboard:</h3>
+            <div id="room_leaderboard" ></div>
         </div>
 
     </div>
 
     <!-- <h2>Room Details:</h2> -->
     
-    <div id="questions">
-        <div id="question_zone">
-            <h2>Question:</h2>
-        </div>
+    <div id="questions" class="main_zone">
+        <h3>Question:</h3>
+        <div id="question_zone" ></div>
         <div id="room_stats"></div>
-        <div id="answer_zone"></div>
+        <h3>Answer:</h3>
+        <div id="answer_zone" ></div>
     </div>
 
     <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">
@@ -398,5 +403,9 @@
         Only for show. He who searches for meaning here will be sorely disappointed.
 
     </div> -->
+
+    <div id="footer">
+        <a href="https://www.vecteezy.com/vector-art/2859080-colorful-90s-seamless-pattern">Background Image: "Colorful 90s Seamless Pattern Vectors" by Vecteezy</a>
+    </div>
 </body>
 </html>
