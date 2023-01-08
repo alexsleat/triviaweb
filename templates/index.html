@@ -42,6 +42,10 @@
             var room = getCookie("room");
             // $("#room_menu-button").toggle();
 
+            // Hide the change room button when loading:
+            $("#change_room_menu").hide();
+            
+
             if(room != null){
                 $('#join_room').attr("value", room);
                 $('#start_room_button').attr("value", room);
@@ -61,7 +65,7 @@
                 $("#menu").toggle();
             });
             $('.room_menu-toggler').click(function() {
-                $("#room_menu").toggle();
+                // $("#room_menu").toggle();
                 // $("#room_menu-button").toggle();
             });
 
@@ -101,7 +105,7 @@
             socket.on('my_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
 
-                que = "<div id='question'> <h2>" + q[2] + "</h2> </div>";
+                que = "<div id='question'> <h2 class='question_h2'>" + q[2] + "</h2> </div>";
                 // ans = "<div id='question'> Question : " + q[2] + "</div>";
                 ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
@@ -156,7 +160,7 @@
             socket.on('my_liar_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
 
-                que = "<div id='question'> <h2>" + q[2] + "</h2> </div>";
+                que = "<div id='question'> <h3 class='question_h2'>" + q[2] + "</h3> </div>";
                 // ans = "<div id='question'> Question : " + q[2] + "</div>";
                 ans = "<form id='liar_ans' method='POST' action='#'>";
                 ans += "<input type='text' class='lie_input' id='user_lie' placeholder='Write your fake answer here!' name='user_lie' >";
@@ -269,6 +273,7 @@
                 setCookie("room", $('#join_room').val(), 1);
 
                 $("#room_menu").toggle();
+                $("#change_room_menu").toggle();
                 // $("#room_menu-button").toggle();
                 return false;
             });
@@ -276,7 +281,7 @@
                 var gametypeval = $(this).val();
                 var gametypeval = document.activeElement.getAttribute('name');
 
-                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val(), gametype: gametypeval});
+                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val(), category: $('#category').val(), gametype: gametypeval});
                 return false;
             });
             $('form#leave').submit(function(event) {
@@ -295,6 +300,11 @@
                 socket.emit('disconnect_request');
                 return false;
             });
+            $('form#change_room').submit(function(event) {
+                $("#room_menu").toggle();
+                $("#change_room_menu").toggle();
+                return false;
+            });
         });
     </script>
 </head>
@@ -305,107 +315,203 @@
       Current transport is: <b><span id="transport"></span></b><br>
       Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
     </p> -->
-    <div id="header" class="row header">
-        <div id="title" class="col-75">
-            <h1>Let's get quizzic<b>AL(EX)</b>!</h1>
-        </div>
-        <div id="menu-button" class="col-25">
-            <a href="#" class="menu-toggler">
-                <img src="/static/menu.png">
-            </a>
-        </div>
-    </div>
-    
-    <div id="top_row">
-        
-        <div id="menu" class="menubar">
-            <h3>Menu:</h3>
-            <div class="row">
-                <div id="room_menu-button" class="col-25">
-                    <a href="#" class="room_menu-toggler">
-                        <img width="48px" height="auto" alt="Change User or Room" src="/static/change_room.png">
+    <div class="wrap_all">
+        <div class="content">
+            <div id="header" class="row header">
+                <div id="title" class="col-75">
+                    <h1 class="menu_h1">Quizz</h1>
+                </div>
+                <div id="menu-button" class="col-25">
+                    <a href="#" class="menu-toggler">
+                        <img width="75%" src="/static/menu.png">
                     </a>
-                </div>
-                <div class="col-75">
-                    <div id="room_menu" >
-                        <form id="name_join" method="POST" action='#'>
-                            <div class="row rowl">
-                                <div class="col-25">
-                                    <label for="fname">Your<br>Name</label>
-                                </div>
-                                <div class="col-75">
-                                    <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
-                                </div>
-                            </div>
-                            <div class="row rowd">
-                                <div class="col-25">
-                                    <label for="fname">Room<br>Name</label>
-                                </div>
-                                <div class="col-75">
-                                    <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
-                                </div>
-                            </div>
-                            <input class="menu_submit" type="submit" value="Join Room">
-                        </form>
-                    </div>
-                </div>
-            </div> 
-            <!-- ROW Break -->
-            <div class="row">
-                <div id="question_menu-button" class="col-25">
-                    <a href="#" class="question_menu-toggler">
-                        <img width="48px" height="auto" alt="Set number of Questions" src="/static/questions.png">
-                    </a>
-                </div>
-                <div class="col-75">
-                    <div id="question_menu">
-                        <form id="start_room" method="POST" action='#'>
-                            <div class="row rowl">
-                                <div class="col-25">
-                                    <label for="fname">No. of<br>Questions</label>
-                                </div>
-                                <div class="col-75">
-                                    <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
-                                </div>
-                            </div>
-                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
-                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
-                        </form>
-                    </div>
                 </div>
             </div>
+            
+            <div id="top_row">
 
+                <!-- Menu with icons for hiding: -->
+                
+                <!-- <div id="menu" class="menubar">
+                    <h3>Menu:</h3>
+                    <div class="row">
+                        <div id="room_menu-button" class="col-25">
+                            <a href="#" class="room_menu-toggler">
+                                <img width="48px" height="auto" alt="Change User or Room" src="/static/change_room.png">
+                            </a>
+                        </div>
+                        <div class="col-75">
+                            <div id="room_menu" >
+                                <form id="name_join" method="POST" action='#'>
+                                    <div class="row rowl">
+                                        <div class="col-25">
+                                            <label for="fname">Your<br>Name</label>
+                                        </div>
+                                        <div class="col-75">
+                                            <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
+                                        </div>
+                                    </div>
+                                    <div class="row rowd">
+                                        <div class="col-25">
+                                            <label for="fname">Room<br>Name</label>
+                                        </div>
+                                        <div class="col-75">
+                                            <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
+                                        </div>
+                                    </div>
+                                    <input class="menu_submit" type="submit" value="Join Room">
+                                </form>
+                            </div>
+                        </div>
+                    </div> 
+                    ///// -- ROW Break 
+                    <div class="row">
+                        <div id="question_menu-button" class="col-25">
+                            <a href="#" class="question_menu-toggler">
+                                <img width="48px" height="auto" alt="Set number of Questions" src="/static/questions.png">
+                            </a>
+                        </div>
+                        <div class="col-75">
+                            <div id="question_menu">
+                                <form id="start_room" method="POST" action='#'>
+                                    <div class="row rowl">
+                                        <div class="col-25">
+                                            <label for="fname">No. of<br>Questions</label>
+                                        </div>
+                                        <div class="col-75">
+                                            <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-50">
+                                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
+                                        </div>
+                                        <div class="col-50">
+                                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div> -->
+
+                    <!-- Menu without hiders: -->
+
+                    <div id="menu" class="menubar">
+                        <h3 class="menu_h3">Menu:</h3>
+                        <div class="row">
+
+                            <div id="room_menu" >
+                                <form id="name_join" method="POST" action='#'>
+                                    <div class="row rowl">
+                                        <div class="col-50">
+                                            <label for="fname">Your Name</label>
+                                        </div>
+                                        <div class="col-50">
+                                            <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
+                                        </div>
+                                    </div>
+                                    <div class="row rowd">
+                                        <div class="col-50">
+                                            <label for="fname">Room Name</label>
+                                        </div>
+                                        <div class="col-50">
+                                            <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
+                                        </div>
+                                    </div>
+                                    <input class="menu_submit" type="submit" value="Join Room">
+                                </form>
+                            </div>
+                            <div id="change_room_menu" method="POST" action='#'>
+                                <form id="change_room">
+                                    <input class="menu_submit" type="submit" value="Change Name / Room">
+                                </form>
+                            </div>
+
+                        </div> 
+                        <!-- ROW Break -->
+                        <div class="row">
+
+                            <div id="question_menu">
+                                <form id="start_room" method="POST" action='#'>
+
+                                    <div class="row rowl">
+                                        <div class="col-50">
+                                            <label for="fname">Category</label>
+                                        </div>
+                                        <div class="col-50">
+                                            <select id="category" name="category">
+                                                <option value="0">Any</option>
+                                                <option value="9">General Knowledge</option>
+                                                <option value="11">Film</option>
+                                                <option value="22">Geography</option>
+                                                <option value="23">History</option>
+                                                <option value="12">Music</option>
+                                                <option value="20">Mythology</option>
+                                                <option value="17">Science & Nature</option>
+                                                <option value="21">Sports</option>
+                                                <option value="14">TV</option>
+                                                <option value="15">Video Games</option>
+                                              </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row rowd">
+                                        <div class="col-50">
+                                            <label for="fname">No. of Questions</label>
+                                        </div>
+                                        <div class="col-50">
+                                            <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" value="5" required>
+                                        </div>
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-50">
+                                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
+                                        </div>
+                                        <div class="col-50">
+                                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                        </div>
+
+                </div>
+                <!-- <h2>Receive:</h2>
+                <div id="log"></div> -->
+
+                <div id="leaderboard_handler">
+                    <h3  class="leaderboard_h3">Leaderboard:</h3>
+                    <div id="room_leaderboard" ></div>
+                </div>
+
+            </div>
+
+            <!-- <h2>Room Details:</h2> -->
+            
+            <div id="questions" class="main_zone">
+                <h3  class="question_h3">Question:</h3>
+                <div id="question_zone" ></div>
+                <div id="room_stats"></div>
+                <h3 class="answer_h3">Answer:</h3>
+                <div id="answer_zone" ></div>
+            </div>
+
+            <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">
+                
+                You may put any HTML here. This is dummy copy. It is not meant to be read. 
+                It has been placed here solely to demonstrate the look and feel of finished, typeset text. 
+                Only for show. He who searches for meaning here will be sorely disappointed.
+
+            </div> -->
         </div>
-        <!-- <h2>Receive:</h2>
-        <div id="log"></div> -->
-
-        <div id="leaderboard_handler">
-            <h3>Leaderboard:</h3>
-            <div id="room_leaderboard" ></div>
-        </div>
-
     </div>
-
-    <!-- <h2>Room Details:</h2> -->
+        <div class="footer">
+            Created by <a href="https://alexsleat.co.uk">Alex</a><br><br>
+            <a href="https://www.buymeacoffee.com/alexsleat"><img height="80px" width="auto" src="/static/bmc.png"></a><br>
+            Background Image: <a href="https://www.vecteezy.com/vector-art/2859080-colorful-90s-seamless-pattern">by Vecteezy</a>
+        </div>
     
-    <div id="questions" class="main_zone">
-        <h3>Question:</h3>
-        <div id="question_zone" ></div>
-        <div id="room_stats"></div>
-        <h3>Answer:</h3>
-        <div id="answer_zone" ></div>
-    </div>
-
-    <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">
-        
-        You may put any HTML here. This is dummy copy. It is not meant to be read. 
-        It has been placed here solely to demonstrate the look and feel of finished, typeset text. 
-        Only for show. He who searches for meaning here will be sorely disappointed.
-
-    </div> -->
-
-    <div id="footer">
-        <a href="https://www.vecteezy.com/vector-art/2859080-colorful-90s-seamless-pattern">Background Image: "Colorful 90s Seamless Pattern Vectors" by Vecteezy</a>
-    </div>
 </body>
 </html>

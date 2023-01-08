@@ -58,7 +58,7 @@ def add_user_to_room(room, username, publish=True):
 #
 #   input: (str) room, (bool) running, (int) quiz_flag, (int) quiz_timer
 # 
-def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, gametype="quiz"):
+def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, category="0", gametype="quiz"):
 
     global threads_dict
 
@@ -78,11 +78,12 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, gametype="
             if(running):
                 threads_dict[room]["running"] = True
                 threads_dict[room]["gametype"] = gametype
+                threads_dict[room]["category"] = category
                 print(threads_dict)
                 if(gametype=="quiz"):
-                    threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer) )
+                    threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer, category) )
                 elif(gametype=="liar"):
-                    threads_dict[room]["thread"] = socketio.start_background_task( room_liar_thread(room, quiz_flag, quiz_timer) )
+                    threads_dict[room]["thread"] = socketio.start_background_task( room_liar_thread(room, quiz_flag, quiz_timer, category) )
 
             else:
                 threads_dict[room]["running"] = False
@@ -97,6 +98,7 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, gametype="
         threads_dict[room]["liar_answers"] = {}
         threads_dict[room]["running"] = running
         threads_dict[room]["gametype"] = ""
+        threads_dict[room]["category"] = ""
 
         # ## If it's set to run, spawn it:
         # if(running):
@@ -139,11 +141,15 @@ def convert_and_send_json(room, broadcast_title, input_dict):
 # MAIN Thread, spun off when a room starts a game
 #
 #################################################
-def room_quiz_thread(room, quiz_flag, quiz_timer):
+def room_quiz_thread(room, quiz_flag, quiz_timer, category):
     print("QUIZ TIME")
 
-    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)# + "&encode=url3986"
+    QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)
+    if(category != "0"):
+        QUESTION_URL = QUESTION_URL + "&category=" + str(category)
     QUESTIONS = None
+
+    print(QUESTION_URL)
 
     current_question = ""
     correct_answer = ""
@@ -223,12 +229,14 @@ def room_quiz_thread(room, quiz_flag, quiz_timer):
 # MAIN Thread, spun off when a room starts a game
 #
 #################################################
-def room_liar_thread(room, quiz_flag, quiz_timer):
+def room_liar_thread(room, quiz_flag, quiz_timer, category):
     print("LIAR TIME")
 
     global threads_dict
 
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag) + "&type=multiple"
+    if(category != "0"):
+        QUESTION_URL = QUESTION_URL + "&category=" + str(category)
     QUESTIONS = None
 
     WRITE_ANSWER_WEIGHT = 3
@@ -449,7 +457,8 @@ def start_room(message):
     room = message["room"]
     numofq =  message["numofq"]
     room_type = message["gametype"]
-    print(room + " is starting with " + numofq + " questions")
+    category = message["category"]
+    print(room + " is starting with " + numofq + " questions " + " category: " + category)
 
     quiz_flag = int(numofq)
 
@@ -457,7 +466,7 @@ def start_room(message):
     print(threads_dict)
 
     ## Check if room already exists:
-    update_room_list(room, True, quiz_flag, 10, room_type)
+    update_room_list(room, True, quiz_flag, 10, category, room_type)
     
 
 @socketio.event
