@@ -4,6 +4,8 @@ import random
 
 from flask import Flask, render_template, session, request, \
     copy_current_request_context
+from flask_cors import CORS, cross_origin
+
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
 import urllib.request, json 
@@ -502,7 +504,10 @@ def my_liar_answer(message):
 
 if __name__ == '__main__':
     # socketio.run(app, host='0.0.0.0', port=5500)
-    socketio.run(app, port=5000)
+    # socketio.run(app, port=5000)
+
+    CORS(app)
+    socketio.run(app, port=5500, debug = False, use_reloader=False)
 
     # Example of servering for production:
     # from waitress import serve
