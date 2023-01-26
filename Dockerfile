@@ -1,9 +1,10 @@
 FROM python:3.8-slim
-# Use the python latest image
-COPY . ./
-# Copy the current folder content into the docker image
-RUN pip install -r requirements.txt
-# Install the required packages of the application
-# CMD gunicorn app:app -w 2 --threads 2 -b $TW_IP:$TW_PORT
 
-CMD ["gunicorn"  , "-b", "0.0.0.0:8000", "app:app"]
+# Copy the current folder content into the docker image
+COPY . ./
+
+# Install the required packages of the application
+RUN pip install -r requirements.txt
+
+# Run gunicorn, with eventlet for socketio
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "1", "--worker-class", "eventlet", "app:app"]

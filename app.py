@@ -20,8 +20,9 @@ async_mode = None
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 #socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins='https://triviaweb.deta.dev')
-socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, cors_allowed_origins='*')
-#socketio = SocketIO(app, async_mode=async_mode, async_handlers=False)
+# socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode=async_mode, async_handlers=False)
+
 thread = None
 thread_lock = Lock()
 
