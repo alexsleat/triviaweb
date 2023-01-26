@@ -4,6 +4,8 @@ import random
 
 from flask import Flask, render_template, session, request, \
     copy_current_request_context
+from flask_cors import CORS, cross_origin
+
 from flask_socketio import SocketIO, emit, join_room, leave_room, \
     close_room, rooms, disconnect
 import urllib.request, json 
@@ -13,11 +15,13 @@ from html.parser import HTMLParser
 # Set this variable to "threading", "eventlet" or "gevent" to test the
 # different async modes, or leave it set to None for the application to choose
 # the best option based on installed packages.
-async_mode = 'eventlet'
+async_mode = None
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins="'*'")
+#socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins='https://triviaweb.deta.dev')
+socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, cors_allowed_origins='*')
+#socketio = SocketIO(app, async_mode=async_mode, async_handlers=False)
 thread = None
 thread_lock = Lock()
 
@@ -344,11 +348,11 @@ def index():
     return render_template('index.html', async_mode=socketio.async_mode)
 
 
-# @socketio.event
-# def my_event(message):
-#     session['receive_count'] = session.get('receive_count', 0) + 1
-#     emit('my_response',
-#          {'data': message['data'], 'count': session['receive_count']})
+@socketio.event
+def my_event(message):
+    session['receive_count'] = session.get('receive_count', 0) + 1
+    emit('my_response',
+         {'data': message['data'], 'count': session['receive_count']})
 
 
 # @socketio.event
@@ -444,7 +448,12 @@ def name_join(message):
     join_room(room)
     print("Now in: ", rooms())
 
-    session['receive_count'] = session.get('receive_count', 0) + 1
+    # session['receive_count'] = session.get('receive_count', 0) + 1
+    # emit('my_response',
+    #       {'data': 'In rooms: ' + room,
+    #        'count': 0})
+
+    convert_and_send_json(room, 'my_response', {'data': room, 'count': 666})
 
     ## Check if room already exists:
     update_room_list(room, False)
@@ -494,9 +503,11 @@ def my_liar_answer(message):
     threads_dict[room]["liar_answers"][username] = answer
 
 if __name__ == '__main__':
+    # socketio.run(app, host='0.0.0.0', port=5500)
+    # socketio.run(app, port=5000)
 
-    # socketio.run(app, host='0.0.0.0', port=5000)
-    socketio.run(app, port=5000)
+    CORS(app)
+    socketio.run(app, port=6666, debug = False, use_reloader=False)
 
     # Example of servering for production:
     # from waitress import serve
