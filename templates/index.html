@@ -293,6 +293,52 @@
 
             });
 
+            // Game end handler - display final leaderboard with medals
+            socket.on('game_end', function(msg, cb) {
+                var final_leaderboard = JSON.parse(msg.data);
+                
+                // Sort leaderboard by points (highest first)
+                var sorted = Object.entries(final_leaderboard)
+                    .sort((a, b) => b[1] - a[1]);
+                
+                var html = '<div id="end_screen_container" class="end_screen_container">';
+                html += '<h2 class="end_screen_title">Final Results</h2>';
+                
+                sorted.forEach(function(entry, index) {
+                    var name = entry[0];
+                    var score = entry[1];
+                    var medal = '';
+                    var rank_class = '';
+                    
+                    if (index === 0) {
+                        medal = '🥇';
+                        rank_class = 'rank_1';
+                    } else if (index === 1) {
+                        medal = '🥈';
+                        rank_class = 'rank_2';
+                    } else if (index === 2) {
+                        medal = '🥉';
+                        rank_class = 'rank_3';
+                    } else {
+                        rank_class = 'rank_other';
+                    }
+                    
+                    html += '<div class="leaderboard_entry ' + rank_class + '">';
+                    if (medal) html += '<span class="medal">' + medal + '</span>';
+                    html += '<span class="player_name">' + name + '</span>';
+                    html += '<span class="player_score">' + score + ' pts</span>';
+                    html += '</div>';
+                });
+                
+                html += '</div>';
+                
+                // Hide the questions and show the end screen
+                $('#questions').hide();
+                $('#game_end_screen').html(html).show();
+                
+                if (cb) cb();
+            });
+
             // Countdown handler
             socket.on('my_countdown', function(msg, cb) {
 
@@ -310,9 +356,19 @@
                 $('#room_stats').html(text);
             });
 
-            
-
-            // Interval function that tests message latency by sending a "ping"
+            // Reset UI when new game starts
+            socket.on('my_start', function(msg, cb) {
+                d = JSON.parse(msg.data);
+                $('#game_end_screen').hide();
+                $('#questions').show();
+                if(d[0] == "popup"){
+                    $("#game_splash_screen").show();
+                }
+                else if(d[0] == "start"){
+                    $("#game_splash_screen").hide();
+                }
+                $("#menu").hide();
+            });
             // message. The server then responds with a "pong" message and the
             // round trip time is measured.
             var ping_pong_times = [];
@@ -584,6 +640,9 @@
                 <div id="room_stats"></div>
                 <h3 class="answer_h3">Answer:</h3>
                 <div id="answer_zone" ></div>
+            </div>
+
+            <div id="game_end_screen" class="main_zone" style="display: none;">
             </div>
 
             <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">

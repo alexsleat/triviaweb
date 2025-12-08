@@ -334,3 +334,114 @@ input[type=text] {
 .footer a:visited { color: #70DB93; }
 .footer a:hover { color: #70DB93; }
 .footer a:active { color: #70DB93; }
+
+/* End screen styles */
+.end_screen_container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    gap: 20px;
+}
+
+.end_screen_title {
+    font-size: 2.5em;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.leaderboard_entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 15px 30px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    min-width: 400px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+}
+
+.leaderboard_entry .medal {
+    font-size: 2em;
+    min-width: 50px;
+}
+
+.leaderboard_entry .player_name {
+    flex: 1;
+    font-weight: bold;
+}
+
+.leaderboard_entry .player_score {
+    font-weight: bold;
+    padding-left: 20px;
+}
+
+/* Rank 1 - Gold */
+.rank_1 {
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    font-size: 1.8em;
+    min-width: 450px;
+    box-shadow: 0 8px 15px rgba(255, 215, 0, 0.4);
+}
+
+.rank_1 .medal {
+    font-size: 2.5em;
+}
+
+.rank_1 .player_name,
+.rank_1 .player_score {
+    font-size: 1.5em;
+    color: #333;
+}
+
+/* Rank 2 - Silver */
+.rank_2 {
+    background: linear-gradient(135deg, #C0C0C0 0%, #A9A9A9 100%);
+    font-size: 1.4em;
+    min-width: 420px;
+    box-shadow: 0 6px 12px rgba(192, 192, 192, 0.4);
+}
+
+.rank_2 .medal {
+    font-size: 2.2em;
+}
+
+.rank_2 .player_name,
+.rank_2 .player_score {
+    font-size: 1.2em;
+    color: #333;
+}
+
+/* Rank 3 - Bronze */
+.rank_3 {
+    background: linear-gradient(135deg, #CD7F32 0%, #B87333 100%);
+    font-size: 1.1em;
+    min-width: 400px;
+    box-shadow: 0 4px 10px rgba(205, 127, 50, 0.3);
+}
+
+.rank_3 .medal {
+    font-size: 2em;
+}
+
+.rank_3 .player_name,
+.rank_3 .player_score {
+    font-size: 1em;
+    color: #fff;
+}
+
+/* Other ranks */
+.rank_other {
+    background-color: rgba(200, 200, 200, 0.1);
+    font-size: 0.9em;
+    min-width: 380px;
+}
+
+.rank_other .player_name,
+.rank_other .player_score {
+    font-size: 0.9em;
+    color: var(--dark-text);
+}
+
