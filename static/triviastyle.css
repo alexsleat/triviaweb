@@ -651,6 +651,18 @@ label {
     opacity: 0.6;
 }
 
+/* Lie attribution text shown during answer reveal in liar mode */
+.lie_attribution {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    text-align: center;
+    margin-top: 0.5rem;
+    font-style: italic;
+    padding: 0.5rem;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 4px;
+}
+
 /* Progress bar */
 #room_stats {
     margin-bottom: 1.5rem;

@@ -19,6 +19,7 @@ from threading import Lock
 from queue import Queue
 import random
 import time
+import os
 
 from flask import Flask, render_template, session, request, copy_current_request_context
 from flask_cors import CORS, cross_origin
@@ -36,7 +37,7 @@ import logging
 async_mode = None
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'secret!'
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 #socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins='https://triviaweb.deta.dev')
 # socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, cors_allowed_origins='*')
 socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, 
@@ -404,16 +405,14 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
     global threads_dict
 
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag) + "&type=multiple"
-    if(category != "0"):
+    if category != "0":
         QUESTION_URL = QUESTION_URL + "&category=" + str(category)
     QUESTIONS = None
-
-    WRITE_ANSWER_WEIGHT = 3
 
     current_question = ""
     correct_answer = ""
 
-    ## Load the questions from opentdb:
+    # Load the questions from opentdb
     try:
         with urllib.request.urlopen(QUESTION_URL, timeout=10) as url:
             data = json.load(url)
@@ -422,128 +421,122 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
         logger.exception("Error fetching questions for liar mode: %s", e)
         QUESTIONS = []
 
-    count = 0
-    ### Check if there is questions in the list
-    if quiz_flag: 
-
+    # Send initial start signal
+    if quiz_flag and QUESTIONS:
         start_l = ["start", "liar"]
-        convert_and_send_json(room, 'my_start', {'data': start_l, 'count': count})
+        convert_and_send_json(room, 'my_start', {'data': start_l, 'count': 0})
 
-        count = 0
+        # Single loop through the questions
+        for i in range(quiz_flag):
+            count = i
+            if count >= len(QUESTIONS):
+                count = count % len(QUESTIONS)
 
-        # Check there are questions; then iterate and drive the round.
-        if quiz_flag:
-            start_l = ["start"]
-            convert_and_send_json(room, "my_start", {"data": start_l, "count": count})
+            # Clear previous answers and prepare resync metadata
+            threads_dict[room]["answers"] = {}
+            threads_dict[room]["liar_answers"] = {}
+            threads_dict[room]["current_question_index"] = count
+            threads_dict[room]["current_question"] = None
+            threads_dict[room]["current_answers"] = None
+            threads_dict[room]["question_ends_at"] = None
 
-            for i in range(quiz_flag):
-                count = i
-                if count >= len(QUESTIONS):
-                    count = 0
+            logger.debug("Question payload (liar): %s", QUESTIONS[count])
 
-                # Clear previous answers and prepare resync metadata.
-                threads_dict[room]["answers"] = {}
-                threads_dict[room]["current_question_index"] = count
-                threads_dict[room]["current_question"] = None
-                count = 0
+            current_question = QUESTIONS[count]["question"]
+            correct_answer = QUESTIONS[count]["correct_answer"]
 
-                if quiz_flag:
-                    start_l = ["start", "liar"]
-                    convert_and_send_json(room, "my_start", {"data": start_l, "count": count})
+            # Phase 1: Ask players to write their lies
+            question_l = ["Q" + str(count), "text_question", current_question, ["liar"]]
+            threads_dict[room]["current_question"] = current_question
+            threads_dict[room]["current_answers"] = ["liar"]
 
-                    for i in range(quiz_flag):
-                        count = i
-                        if count >= len(QUESTIONS):
-                            count = 0
+            # Use configured liar submit duration
+            liar_submit = threads_dict[room].get("liar_submit_timer", 10)
+            threads_dict[room]["question_ends_at"] = time.time() + liar_submit
+            threads_dict[room]["last_quiz_duration"] = liar_submit
 
-                        # Clear previous answers and prepare resync metadata.
-                        threads_dict[room]["answers"] = {}
-                        threads_dict[room]["current_question_index"] = count
-                        threads_dict[room]["current_question"] = None
-                        threads_dict[room]["current_answers"] = None
-                        threads_dict[room]["question_ends_at"] = None
+            convert_and_send_json(room, "my_liar_question", {"data": question_l, "count": count})
 
-                        logger.debug("Question payload (liar): %s", QUESTIONS[count] if QUESTIONS and count < len(QUESTIONS) else None)
+            # Wait for users to submit lies
+            countdown_timer(room, liar_submit, "question_countdown")
 
-                        if QUESTIONS:
-                            current_question = QUESTIONS[count]["question"]
-                            correct_answer = QUESTIONS[count]["correct_answer"]
-                        else:
-                            current_question = "(No question available)"
-                            correct_answer = ""
+            # Phase 2: Build answer list combining incorrect answers (from API) and user lies
+            # De-duplicate: if a user's lie matches something already in the list, don't add duplicate
+            # Also track which usernames submitted each lie for attribution
+            answers = list(QUESTIONS[count]["incorrect_answers"]) if QUESTIONS else []
+            lie_submitters = {}  # maps lie text -> list of usernames who submitted it
 
-                        # Clear the liar answers for this round.
-                        threads_dict[room]["liar_answers"] = {}
+            for username, lie in threads_dict[room]["liar_answers"].items():
+                # Only add the lie if it's not already in the answer list (case-insensitive comparison)
+                if not any(ans.lower() == lie.lower() for ans in answers):
+                    answers.append(lie)
+                    lie_submitters[lie] = [username]
+                else:
+                    # Lie text already exists; track this submitter
+                    if lie not in lie_submitters:
+                        lie_submitters[lie] = []
+                    lie_submitters[lie].append(username)
 
-                        question_l = ["Q" + str(count), "text_question", current_question, ["liar"]]
-                        threads_dict[room]["current_question"] = current_question
-                        threads_dict[room]["current_answers"] = ["liar"]
+            # Add correct answer and shuffle
+            answers.insert(0, correct_answer)
+            random.shuffle(answers)
+            
+            # Store lie submitters in room state for use during answer reveal
+            threads_dict[room]["lie_submitters"] = lie_submitters
 
-                        # Use configured liar submit duration (fall back to WRITE_ANSWER_WEIGHT * quiz_timer)
-                        liar_submit = threads_dict[room].get("liar_submit_timer", quiz_timer * WRITE_ANSWER_WEIGHT)
-                        threads_dict[room]["question_ends_at"] = time.time() + liar_submit
-                        threads_dict[room]["last_quiz_duration"] = liar_submit
+            # Send the combined answer list to players
+            question_l = ["Q" + str(count), "text_question", current_question, answers]
+            threads_dict[room]["current_answers"] = answers
+            threads_dict[room]["question_ends_at"] = time.time() + quiz_timer
+            threads_dict[room]["last_quiz_duration"] = quiz_timer
 
-                        convert_and_send_json(room, "my_liar_question", {"data": question_l, "count": count})
+            convert_and_send_json(room, "my_question", {"data": question_l, "count": count})
 
-                        # Wait for users to submit lies.
-                        countdown_timer(room, liar_submit, "question_countdown")
+            # Phase 3: Allow time for users to answer
+            countdown_timer(room, quiz_timer, "question_countdown")
 
-                        # Construct answer list combining incorrect answers and user lies.
-                        answers = QUESTIONS[count]["incorrect_answers"] if QUESTIONS else []
+            # Phase 4: Reveal correct answer and calculate scoring
+            logger.info("Answer reveal (liar mode) for room %s (question %s)", room, count)
+            data_string = ["The correct answer was ", correct_answer]
+            convert_and_send_json(room, "my_question_answer", {"data": data_string})
 
-                        keep_first_cpu_lie = False
-                        for username, lie in threads_dict[room]["liar_answers"].items():
-                            if keep_first_cpu_lie:
-                                try:
-                                    answers.pop(0)
-                                except Exception:
-                                    pass
-                            keep_first_cpu_lie = True
-                            answers.append(lie)
+            # In liar mode, also send lie attribution data so client can display who submitted each lie
+            lie_attribution = threads_dict[room].get("lie_submitters", {})
+            socketio.emit("liar_lie_attribution", {"lies": lie_attribution}, to=room)
 
-                        answers.insert(0, correct_answer)
-                        random.shuffle(answers)
+            # Track which lies were selected and by whom
+            lie_selections = {}  # maps lie -> list of usernames who selected it
+            for username, answer in threads_dict[room]["answers"].items():
+                correct = (answer == correct_answer)
+                if correct:
+                    # Correct answer: 10 points
+                    threads_dict[room]["points"][username] = (
+                        threads_dict[room]["points"].get(username, 0) + 10
+                    )
+                else:
+                    # Wrong answer: check if it matches any user's lie
+                    for liar, lie in threads_dict[room]["liar_answers"].items():
+                        if answer == lie and liar != username:
+                            # Liar gets 5 points for fooling this user
+                            threads_dict[room]["points"][liar] = (
+                                threads_dict[room]["points"].get(liar, 0) + 5
+                            )
 
-                        question_l = ["Q" + str(count), "text_question", current_question, answers]
-                        convert_and_send_json(room, "my_question", {"data": question_l, "count": count})
+                logger.info("USER: %s ANSWERED: %s correct=%s", username, answer, correct)
 
-                        # Allow time for users to answer the combined list.
-                        # For liar mode we use the room's quiz_timer and liar_submit_timer
-                        q_timer = threads_dict[room].get("quiz_timer", quiz_timer)
-                        liar_submit = threads_dict[room].get("liar_submit_timer", q_timer)
-                        countdown_timer(room, q_timer, "question_countdown")
+            # Send updated leaderboard
+            leaderboard_data = {}
+            for player in threads_dict[room]["points"].keys():
+                leaderboard_data[player] = {
+                    "points": threads_dict[room]["points"][player],
+                    "games_won": threads_dict[room]["games_won"].get(player, 0)
+                }
+            convert_and_send_json(room, "my_leaderboard", {"data": leaderboard_data})
 
-                        # Reveal the correct answer and update scoring.
-                        logger.info("Answer reveal (liar mode) for room %s (question %s)", room, count)
-                        data_string = ["The correct answer was ", correct_answer]
-                        convert_and_send_json(room, "my_question_answer", {"data": data_string})
+            # Wait before next question
+            countdown_timer(room, 3, "next_question")
 
-                        for username, answer in threads_dict[room]["answers"].items():
-                            correct = True if answer == correct_answer else False
-                            if correct:
-                                threads_dict[room]["points"][username] = (
-                                    threads_dict[room]["points"].get(username, 0) + 10
-                                )
-                            else:
-                                for liar, lie in threads_dict[room]["liar_answers"].items():
-                                    if answer == lie and liar != username:
-                                        threads_dict[room]["points"][liar] = (
-                                            threads_dict[room]["points"].get(liar, 0) + 100
-                                        )
-
-                            logger.info("USER: %s ANSWERED: %s correct=%s", username, answer, correct)
-
-                        leaderboard_data = {}
-                        for player in threads_dict[room]["points"].keys():
-                            leaderboard_data[player] = {
-                                "points": threads_dict[room]["points"][player],
-                                "games_won": threads_dict[room]["games_won"].get(player, 0)
-                            }
-                        convert_and_send_json(room, "my_leaderboard", {"data": leaderboard_data})
-                        countdown_timer(room, quiz_timer, "next_question")
-
-                threads_dict[room]["running"] = False
+        threads_dict[room]["running"] = False
 
         # Emit game end event with final leaderboard
         logger.info("Liar game ended for room %s", room)

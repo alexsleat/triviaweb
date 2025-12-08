@@ -346,6 +346,31 @@
 
             });
 
+            // Handle lie attribution in liar mode (shows who submitted each lie)
+            socket.on('liar_lie_attribution', function(msg, cb) {
+                var lies = msg.lies || {};
+                console.log('Liar lie attribution:', lies);
+
+                // For each lie, find the corresponding answer button and add attribution text
+                for (var lie_text in lies) {
+                    var submitters = lies[lie_text];
+                    if (Array.isArray(submitters) && submitters.length > 0) {
+                        var submitter_names = submitters.join(', ');
+                        var short_id_name = lie_text.replace(/[^A-Z0-9]/ig, "");
+                        var element = document.getElementById("ans_" + short_id_name);
+                        
+                        if (element) {
+                            // Add attribution text below the lie answer button
+                            var wrapper = $(element).closest('.answer_wrapper');
+                            var attribution_html = '<div class="lie_attribution">Submitted by: <strong>' + submitter_names + '</strong></div>';
+                            wrapper.append(attribution_html);
+                        }
+                    }
+                }
+
+                if (cb) cb();
+            });
+
             // Question handler
             socket.on('my_liar_question', function(msg, cb) {
                 q = JSON.parse(msg.data);
