@@ -115,7 +115,14 @@ def add_user_to_room(room, username, publish=True):
     threads_dict[room]["points"][username] = 0
 
     if publish:
-        convert_and_send_json(room, "my_leaderboard", {"data": threads_dict[room]["points"]})
+        # Build leaderboard data with both points and games_won
+        leaderboard_data = {}
+        for player in threads_dict[room]["points"].keys():
+            leaderboard_data[player] = {
+                "points": threads_dict[room]["points"][player],
+                "games_won": threads_dict[room]["games_won"].get(player, 0)
+            }
+        convert_and_send_json(room, "my_leaderboard", {"data": leaderboard_data})
 
 #############################################
 #
@@ -172,9 +179,14 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, category="
         threads_dict[room]["queue"] = Queue
         threads_dict[room]["answers"] = {}
         threads_dict[room]["points"] = {}
+        threads_dict[room]["games_won"] = {}
         threads_dict[room]["liar_answers"] = {}
         threads_dict[room]["sids"] = set()
         threads_dict[room]["users"] = {}
+        # Track the current host for the room (socket id) and last active time
+        threads_dict[room]["host_sid"] = None
+        threads_dict[room]["host_username"] = None
+        threads_dict[room]["last_active"] = time.time()
         threads_dict[room]["running"] = running
         threads_dict[room]["gametype"] = ""
         threads_dict[room]["category"] = ""
@@ -331,8 +343,13 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
 
 
             ##### Send everyones points in leaderboard
-
-            convert_and_send_json(room, 'my_leaderboard', {'data': threads_dict[room]["points"]})
+            leaderboard_data = {}
+            for player in threads_dict[room]["points"].keys():
+                leaderboard_data[player] = {
+                    "points": threads_dict[room]["points"][player],
+                    "games_won": threads_dict[room]["games_won"].get(player, 0)
+                }
+            convert_and_send_json(room, 'my_leaderboard', {'data': leaderboard_data})
             countdown_timer(room, quiz_timer, "next_question")
 
     #### When no 
@@ -343,7 +360,21 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
 
     # Emit game end event with final leaderboard
     logger.info("Quiz game ended for room %s", room)
-    convert_and_send_json(room, 'game_end', {'data': threads_dict[room]["points"]})
+    
+    # Find the winner and update games_won
+    if threads_dict[room]["points"]:
+        winner = max(threads_dict[room]["points"], key=threads_dict[room]["points"].get)
+        threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
+        logger.info("Quiz game winner: %s", winner)
+    
+    # Build game_end data with both points and games_won
+    game_end_data = {}
+    for player in threads_dict[room]["points"].keys():
+        game_end_data[player] = {
+            "points": threads_dict[room]["points"][player],
+            "games_won": threads_dict[room]["games_won"].get(player, 0)
+        }
+    convert_and_send_json(room, 'game_end', {'data': game_end_data})
     threads_dict[room]["running"] = False
 
 ###############################################
@@ -486,14 +517,65 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
 
                             logger.info("USER: %s ANSWERED: %s correct=%s", username, answer, correct)
 
-                        convert_and_send_json(room, "my_leaderboard", {"data": threads_dict[room]["points"]})
+                        leaderboard_data = {}
+                        for player in threads_dict[room]["points"].keys():
+                            leaderboard_data[player] = {
+                                "points": threads_dict[room]["points"][player],
+                                "games_won": threads_dict[room]["games_won"].get(player, 0)
+                            }
+                        convert_and_send_json(room, "my_leaderboard", {"data": leaderboard_data})
                         countdown_timer(room, quiz_timer, "next_question")
 
                 threads_dict[room]["running"] = False
 
         # Emit game end event with final leaderboard
         logger.info("Liar game ended for room %s", room)
-        convert_and_send_json(room, 'game_end', {'data': threads_dict[room]["points"]})
+        
+        # Find the winner and update games_won
+        if threads_dict[room]["points"]:
+            winner = max(threads_dict[room]["points"], key=threads_dict[room]["points"].get)
+            threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
+            logger.info("Liar game winner: %s", winner)
+        
+        # Build game_end data with both points and games_won
+        game_end_data = {}
+        for player in threads_dict[room]["points"].keys():
+            game_end_data[player] = {
+                "points": threads_dict[room]["points"][player],
+                "games_won": threads_dict[room]["games_won"].get(player, 0)
+            }
+        convert_and_send_json(room, 'game_end', {'data': game_end_data})
+
+
+def cleanup_rooms_thread():
+    """Background thread: periodically remove stale rooms.
+
+    Removes rooms that have no connected clients (`sids` empty), are
+    not running, and haven't been active for a configurable expiry
+    period. Runs forever in background with a sleep interval.
+    """
+    ROOM_EXPIRY_SECONDS = 300  # 5 minutes
+    SLEEP_INTERVAL = 60
+    logger.info("Room cleanup thread started (expiry=%s seconds)", ROOM_EXPIRY_SECONDS)
+    while True:
+        try:
+            now = time.time()
+            for room in list(threads_dict.keys()):
+                room_state = threads_dict.get(room)
+                if not room_state:
+                    continue
+                sids = room_state.get("sids", set())
+                running = room_state.get("running", False)
+                last_active = room_state.get("last_active", now)
+                if len(sids) == 0 and not running and (now - last_active) > ROOM_EXPIRY_SECONDS:
+                    logger.info("Cleaning up stale room: %s (last_active=%s)", room, last_active)
+                    try:
+                        del threads_dict[room]
+                    except Exception:
+                        logger.exception("Error deleting room %s", room)
+        except Exception:
+            logger.exception("Error during room cleanup loop")
+        time.sleep(SLEEP_INTERVAL)
 
 
 @socketio.on('close_room')
@@ -580,13 +662,18 @@ def resync_request(message):
 
 
 @socketio.event
-def connect():
+def connect(auth=None):
     """Handle a new client connection.
 
     Emits an initial `my_response` message to acknowledge the connection.
     """
 
     global thread
+    # Start the global cleanup thread once when the first client connects.
+    with thread_lock:
+        if thread is None:
+            thread = socketio.start_background_task(cleanup_rooms_thread)
+
     emit("my_response", {"data": "Connected", "count": 0})
 
 
@@ -605,10 +692,39 @@ def test_disconnect():
             except Exception:
                 pass
             threads_dict[room]["users"].pop(sid, None)
+            # remove sid->room mapping
+            sid_room_map.pop(sid, None)
+            # update last active timestamp
+            threads_dict[room]["last_active"] = time.time()
+            # If the departing client was the host, try to hand over host to another active client
+            try:
+                if threads_dict[room].get("host_sid") == sid:
+                    remaining = threads_dict[room].get("sids", set())
+                    if remaining:
+                        new_host_sid = next(iter(remaining))
+                        new_host_username = threads_dict[room]["users"].get(new_host_sid)
+                        threads_dict[room]["host_sid"] = new_host_sid
+                        threads_dict[room]["host_username"] = new_host_username
+                        logger.info("Reassigned host for room %s to %s (sid=%s)", room, new_host_username, new_host_sid)
+                        # Notify the new host directly
+                        socketio.emit('host_status', {'is_host': True, 'username': new_host_username}, to=new_host_sid)
+                        # Broadcast host change to the room
+                        socketio.emit('host_changed', {'username': new_host_username}, to=room)
+                    else:
+                        # No remaining clients: clear host info
+                        threads_dict[room]["host_sid"] = None
+                        threads_dict[room]["host_username"] = None
+            except Exception:
+                logger.exception("Error during host reassignment for room %s", room)
             logger.debug("Removed sid %s (user=%s) from room %s", sid, username, room)
             socketio.emit('user_disconnected', 
                          {'data': f'Player {username} disconnected'},
                          to=room)
+            
+            # If room is now empty and not running, delete it
+            if len(threads_dict[room]["sids"]) == 0 and not threads_dict[room].get("running", False):
+                logger.info("Cleaning up empty room: %s", room)
+                del threads_dict[room]
     # end test_disconnect
 
 
@@ -629,20 +745,48 @@ def name_join(message):
     sid = request.sid
     if room not in threads_dict:
         update_room_list(room, False)
+    
+    # Add this socket to the room state
     threads_dict[room].setdefault("sids", set()).add(sid)
     threads_dict[room].setdefault("users", {})[sid] = username
+    threads_dict[room].setdefault("games_won", {})[username] = 0
     sid_room_map[sid] = room
-    logger.debug("Now in rooms: %s", rooms())
+    # mark room as active now
+    threads_dict[room]["last_active"] = time.time()
 
-    # session['receive_count'] = session.get('receive_count', 0) + 1
-    # emit('my_response',
-    #       {'data': 'In rooms: ' + room,
-    #        'count': 0})
+    # Determine host assignment: if there's no recorded host or the host is
+    # not currently connected, promote this joiner to host. Otherwise keep
+    # the existing host.
+    current_host_sid = threads_dict[room].get("host_sid")
+    is_host = False
+    if not current_host_sid or current_host_sid not in threads_dict[room].get("sids", set()):
+        # If there was a previous host still connected, clear their status
+        prev = current_host_sid
+        prev_username = threads_dict[room].get('host_username')
+        threads_dict[room]["host_sid"] = sid
+        threads_dict[room]["host_username"] = username
+        is_host = True
+        logger.info("Assigned host for room %s to %s (sid=%s)", room, username, sid)
+        try:
+            if prev and prev in threads_dict[room].get("sids", set()):
+                socketio.emit('host_status', {'is_host': False, 'username': prev_username}, to=prev)
+        except Exception:
+            logger.exception("Failed to notify previous host (sid=%s)", prev)
+        # Notify room about host change
+        socketio.emit('host_changed', {'username': username}, to=room)
+    else:
+        is_host = (current_host_sid == sid)
+
+    logger.debug("Now in rooms: %s", rooms())
+    logger.info("Player %s (sid=%s) is host: %s", username, sid, is_host)
+
+    # Tell this client whether they are host
+    socketio.emit('host_status', {'is_host': is_host, 'username': username}, to=sid)
+
+    # Broadcast player count update to everyone in the room (including this new player)
+    socketio.emit('room_player_update', {'player_count': len(threads_dict[room]["users"])}, to=room)
 
     convert_and_send_json(room, 'my_response', {'data': room, 'count': 666})
-
-    ## Check if room already exists:
-    update_room_list(room, False)
     add_user_to_room(room, username)
 
 
@@ -655,11 +799,23 @@ def start_room(message):
     category = message["category"]
     logger.info("%s is starting with %s questions category: %s", room, numofq, category)
 
-    quiz_flag = int(numofq)
-
     global threads_dict
+    
+    # Check if a game is already running in this room
+    if room in threads_dict and threads_dict[room].get("running"):
+        logger.warning("Game already running in room %s, start request rejected", room)
+        emit('game_start_error', {'data': 'A game is already in progress in this room!'}, to=room)
+        return
+
+    quiz_flag = int(numofq)
     logger.debug("Threads dict prior to start: %s", threads_dict)
 
+    # Reset scores for all players at the start of a new game
+    if room in threads_dict:
+        for username in threads_dict[room]["points"]:
+            threads_dict[room]["points"][username] = 0
+        logger.info("Reset scores for all players in room %s", room)
+    
     ## Check if room already exists:
     update_room_list(room, True, quiz_flag, 10, category, room_type)
     # set room-level metadata for resync

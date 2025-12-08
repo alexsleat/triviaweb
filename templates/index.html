@@ -8,6 +8,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.0.4/socket.io.js" integrity="sha512-aMGMvNYu8Ue4G+fHa359jcPb1u+ytAF+P2SCb+PxrjCdO3n3ZTxJ30zuH39rimUggmTwmh2u7wvQsDTHESnmfQ==" crossorigin="anonymous"></script>
     <script type="text/javascript" charset="utf-8">
 
+        /* Cookie utilities */
         function setCookie(name,value,days) {
             var expires = "";
             if (days) {
@@ -31,7 +32,42 @@
             document.cookie = name +'=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
         }
 
+        /* Dark mode theme management */
+        function initTheme() {
+            var savedTheme = getCookie('theme');
+            var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            var theme = savedTheme || (prefersDark ? 'dark' : 'light');
+            applyTheme(theme);
+        }
+
+        function applyTheme(theme) {
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+                setCookie('theme', 'dark', 365);
+            } else {
+                document.documentElement.classList.remove('dark');
+                setCookie('theme', 'light', 365);
+            }
+            updateThemeButton();
+        }
+
+        function toggleTheme() {
+            var isDark = document.documentElement.classList.contains('dark');
+            applyTheme(isDark ? 'light' : 'dark');
+        }
+
+        function updateThemeButton() {
+            var isDark = document.documentElement.classList.contains('dark');
+            var btn = document.getElementById('theme-toggle');
+            if (btn) {
+                btn.textContent = isDark ? '☀️ Light' : '🌙 Dark';
+            }
+        }
+
         $(document).ready(function() {
+            // Initialize theme from cookie or system preference
+            initTheme();
+
             // Connect to the Socket.IO server.
             // The connection URL has the following format, relative to the current page:
             //     http[s]://<domain>:<port>[/<namespace>]
@@ -48,8 +84,8 @@
 
             var username = getCookie("username");
             var room = getCookie("room");
-            // $("#room_menu-button").toggle();
-
+            var isHost = false;
+            
             // Hide the change room button when loading:
             $("#change_room_menu").hide();
             
@@ -75,6 +111,12 @@
             $('.room_menu-toggler').click(function() {
                 // $("#room_menu").toggle();
                 // $("#room_menu-button").toggle();
+            });
+
+            // Theme toggle button
+            $('#theme-toggle').click(function(e) {
+                e.preventDefault();
+                toggleTheme();
             });
 
             // Event handler for new connections.
@@ -154,11 +196,55 @@
                 if (cb) cb();
             });
 
-            // Handle user disconnected notification
-            socket.on('user_disconnected', function(msg, cb) {
-                $('#log').append('<br><span style="color:orange;">A player has disconnected</span>');
-                if (cb)
-                    cb();
+            // Handle user being designated as host
+            socket.on('host_status', function(msg, cb) {
+                console.log('Received host_status event:', msg);
+                isHost = msg.is_host;
+                $('#player_role').text(isHost ? '👑 Host' : '🎮 Player');
+                $('#player_role').css('background', isHost ? 'var(--primary)' : 'var(--accent)');
+                if (isHost) {
+                    $('#host_controls').show();
+                    console.log('Showing host controls');
+                } else {
+                    $('#host_controls').hide();
+                    console.log('Hiding host controls');
+                }
+                if (cb) cb();
+            });
+
+            // When the server reassigns the host, update UI for everyone.
+            socket.on('host_changed', function(msg, cb) {
+                console.log('Host changed event:', msg);
+                var newHost = msg.username || null;
+                var myName = $('#username').val() || getCookie('username');
+
+                if (!newHost) {
+                    // No host currently
+                    isHost = false;
+                    $('#player_role').text('🎮 Player');
+                    $('#player_role').css('background', 'var(--accent)');
+                    $('#host_controls').hide();
+                } else if (newHost === myName) {
+                    // This client became the host
+                    isHost = true;
+                    $('#player_role').text('👑 Host');
+                    $('#player_role').css('background', 'var(--primary)');
+                    $('#host_controls').show();
+                    console.log('You are now the host');
+                } else {
+                    // Another user is host
+                    isHost = false;
+                    $('#player_role').text('🎮 Player — Host: ' + newHost);
+                    $('#player_role').css('background', 'var(--accent)');
+                    $('#host_controls').hide();
+                }
+
+                if (cb) cb();
+            });
+
+            socket.on('room_player_update', function(msg, cb) {
+                $('#player_count').text(msg.player_count || 0);
+                if (cb) cb();
             });
 
             // Event handler for server sent data.
@@ -174,8 +260,13 @@
             socket.on('my_start', function(msg, cb) {
                 d = JSON.parse(msg.data);
 
-                // Hide menu for players in the room:
-                $("#menu").hide();
+                // Hide join and room info screens
+                $("#join_screen").hide();
+                $("#room_info_screen").hide();
+                
+                // Show questions and leaderboard for gameplay
+                $("#questions").show();
+                $("#leaderboard_handler").show();
 
                 if(d[0] == "popup"){
                     $("#game_splash_screen").show();
@@ -280,16 +371,18 @@
                 msg_json = JSON.parse(msg.data);
                 console.log(msg_json);
 
-                // Sort json data based on points:
-                // msg_json.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
-
-                // text = "<h3>" + username + " in " + room + "</h3><i>Leaderboard:</i> <br><br>";
-                text = "";
-                for (const [key, value] of Object.entries(msg_json)) {
-                    text += "<b>" + key + "</b> : " + value + "<br>";
+                // Build a table with name | current score | games won
+                var table = '<table style="width: 100%; border-collapse: collapse;">';
+                table += '<tr style="background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%); color: white; font-weight: 900;"><th style="padding: 0.75rem; text-align: left; border: 2px solid var(--primary);">Player</th><th style="padding: 0.75rem; text-align: center; border: 2px solid var(--primary);">Round Score</th><th style="padding: 0.75rem; text-align: center; border: 2px solid var(--primary);">Games Won</th></tr>';
+                
+                for (const [name, scores] of Object.entries(msg_json)) {
+                    var roundScore = scores.points || 0;
+                    var gamesWon = scores.games_won || 0;
+                    table += '<tr style="border: 1px solid var(--border);"><td style="padding: 0.75rem; border-right: 1px solid var(--border); font-weight: 600;">' + name + '</td><td style="padding: 0.75rem; text-align: center; border-right: 1px solid var(--border);">' + roundScore + '</td><td style="padding: 0.75rem; text-align: center;">' + gamesWon + '</td></tr>';
                 }
-                text += "<br>";
-                $('#room_leaderboard').html(text);
+                table += '</table>';
+                
+                $('#room_leaderboard').html(table);
 
             });
 
@@ -299,14 +392,15 @@
                 
                 // Sort leaderboard by points (highest first)
                 var sorted = Object.entries(final_leaderboard)
-                    .sort((a, b) => b[1] - a[1]);
+                    .sort((a, b) => b[1].points - a[1].points);
                 
                 var html = '<div id="end_screen_container" class="end_screen_container">';
                 html += '<h2 class="end_screen_title">Final Results</h2>';
                 
                 sorted.forEach(function(entry, index) {
                     var name = entry[0];
-                    var score = entry[1];
+                    var score = entry[1].points || 0;
+                    var gamesWon = entry[1].games_won || 0;
                     var medal = '';
                     var rank_class = '';
                     
@@ -326,7 +420,7 @@
                     html += '<div class="leaderboard_entry ' + rank_class + '">';
                     if (medal) html += '<span class="medal">' + medal + '</span>';
                     html += '<span class="player_name">' + name + '</span>';
-                    html += '<span class="player_score">' + score + ' pts</span>';
+                    html += '<span class="player_score">' + score + ' pts | ' + gamesWon + ' wins</span>';
                     html += '</div>';
                 });
                 
@@ -359,6 +453,9 @@
             // Reset UI when new game starts
             socket.on('my_start', function(msg, cb) {
                 d = JSON.parse(msg.data);
+                $('#join_screen').hide();
+                $('#room_info_screen').hide();
+                $('#leaderboard_handler').show();
                 $('#game_end_screen').hide();
                 $('#questions').show();
                 if(d[0] == "popup"){
@@ -367,7 +464,13 @@
                 else if(d[0] == "start"){
                     $("#game_splash_screen").hide();
                 }
-                $("#menu").hide();
+            });
+
+            // Handle game start error (already in progress)
+            socket.on('game_start_error', function(msg, cb) {
+                var error_msg = JSON.parse(msg.data);
+                alert('Cannot start game: ' + error_msg);
+                if (cb) cb();
             });
             // message. The server then responds with a "pong" message and the
             // round trip time is measured.
@@ -410,21 +513,33 @@
             //     return false;
             // });
             $('form#name_join').submit(function(event) {
-                socket.emit('name_join', {username: $('#username').val(), room: $('#join_room').val()});
-                // $('#start_room_button').attr("value", room);
-                setCookie("username", $('#username').val(), 1);
-                setCookie("room", $('#join_room').val(), 1);
-
-                $("#room_menu").toggle();
-                $("#change_room_menu").toggle();
-                // $("#room_menu-button").toggle();
+                var username_input = $('#username').val();
+                var room_input = $('#join_room').val();
+                socket.emit('name_join', {username: username_input, room: room_input});
+                setCookie("username", username_input, 7);
+                setCookie("room", room_input, 7);
+                
+                // Show room info, hide join screen
+                $('#join_screen').hide();
+                $('#room_info_screen').show();
+                $('#leaderboard_handler').show();
+                $('#current_room').text(room_input);
                 return false;
             });
-            $('form#start_room').submit(function(event) {
-                var gametypeval = $(this).val();
-                var gametypeval = document.activeElement.getAttribute('name');
-
-                socket.emit('start_room', {room: $('#join_room').val(), numofq: $('#question_num').val(), category: $('#category').val(), gametype: gametypeval});
+            // Handle start room with advanced options (buttons are simple inputs,
+            // so listen for clicks rather than submit events on a form).
+            $('#host_controls').on('click', 'input[type=submit]', function(event) {
+                event.preventDefault();
+                var gameType = $(this).attr('name');
+                socket.emit('start_room', {
+                    room: $('#current_room').text(),
+                    numofq: $('#question_num').val(),
+                    category: $('#category').val(),
+                    gametype: gameType,
+                    quiz_timer: parseInt($('#quiz_timer').val()) || 15,
+                    answer_timer: parseInt($('#answer_timer').val()) || 3,
+                    liar_submit_timer: parseInt($('#liar_submit_timer').val()) || 10
+                });
                 return false;
             });
             $('form#leave').submit(function(event) {
@@ -443,222 +558,135 @@
                 socket.emit('disconnect_request');
                 return false;
             });
+            
+            // Change room handler
             $('form#change_room').submit(function(event) {
-                $("#room_menu").toggle();
-                $("#change_room_menu").toggle();
+                // Reset to join screen
+                $('#join_screen').show();
+                $('#room_info_screen').hide();
+                $('#leaderboard_handler').hide();
+                $('#username').val('');
+                $('#join_room').val('');
+                eraseCookie('username');
+                eraseCookie('room');
                 return false;
             });
         });
     </script>
 </head>
 <body>
-    
-    <!-- <p>
-      Async mode is: <b>{{ async_mode }}</b><br>
-      Current transport is: <b><span id="transport"></span></b><br>
-      Average ping/pong latency: <b><span id="ping-pong"></span>ms</b>
-    </p> -->
     <div class="wrap_all">
-        <!-- <div id="log"></div> -->
         <div class="content">
-            <div id="header" class="row header">
-                <div id="title" class="col-75">
-                    <h1 class="menu_h1">Quizz</h1>
-                </div>
-                <div id="menu-button" class="col-25">
-                    <a href="#" class="menu-toggler">
-                        <img width="75%" src="/static/menu.png">
-                    </a>
+            <!-- Header with title and theme toggle -->
+            <div class="header">
+                <h1>🎯 Trivia</h1>
+                <div style="display: flex; gap: 1rem; align-items: center;">
+                    <button id="theme-toggle" class="theme-toggle" title="Toggle dark/light mode"></button>
                 </div>
             </div>
             
             <div id="top_row">
-
-                <!-- Menu with icons for hiding: -->
-                
-                <!-- <div id="menu" class="menubar">
-                    <h3>Menu:</h3>
-                    <div class="row">
-                        <div id="room_menu-button" class="col-25">
-                            <a href="#" class="room_menu-toggler">
-                                <img width="48px" height="auto" alt="Change User or Room" src="/static/change_room.png">
-                            </a>
-                        </div>
-                        <div class="col-75">
-                            <div id="room_menu" >
-                                <form id="name_join" method="POST" action='#'>
-                                    <div class="row rowl">
-                                        <div class="col-25">
-                                            <label for="fname">Your<br>Name</label>
-                                        </div>
-                                        <div class="col-75">
-                                            <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
-                                        </div>
-                                    </div>
-                                    <div class="row rowd">
-                                        <div class="col-25">
-                                            <label for="fname">Room<br>Name</label>
-                                        </div>
-                                        <div class="col-75">
-                                            <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
-                                        </div>
-                                    </div>
-                                    <input class="menu_submit" type="submit" value="Join Room">
-                                </form>
-                            </div>
-                        </div>
-                    </div> 
-                    ///// -- ROW Break 
-                    <div class="row">
-                        <div id="question_menu-button" class="col-25">
-                            <a href="#" class="question_menu-toggler">
-                                <img width="48px" height="auto" alt="Set number of Questions" src="/static/questions.png">
-                            </a>
-                        </div>
-                        <div class="col-75">
-                            <div id="question_menu">
-                                <form id="start_room" method="POST" action='#'>
-                                    <div class="row rowl">
-                                        <div class="col-25">
-                                            <label for="fname">No. of<br>Questions</label>
-                                        </div>
-                                        <div class="col-75">
-                                            <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" required>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-50">
-                                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
-                                        </div>
-                                        <div class="col-50">
-                                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div> -->
-
-                    <!-- Menu without hiders: -->
-
-                    <div id="menu" class="menubar">
-                        <h3 class="menu_h3">Menu:</h3>
-                        <div class="row">
-
-                            <div id="room_menu" >
-                                <form id="name_join" method="POST" action='#'>
-                                    <div class="row rowl">
-                                        <div class="col-50">
-                                            <label for="fname">Your Name</label>
-                                        </div>
-                                        <div class="col-50">
-                                            <input class="menu_item" type="text" name="username" id="username" placeholder="Name" required>
-                                        </div>
-                                    </div>
-                                    <div class="row rowd">
-                                        <div class="col-50">
-                                            <label for="fname">Room Name</label>
-                                        </div>
-                                        <div class="col-50">
-                                            <input class="menu_item" type="text" name="join_room" id="join_room" placeholder="Room name" required>
-                                        </div>
-                                    </div>
-                                    <input class="menu_submit" type="submit" value="Join Room">
-                                </form>
-                            </div>
-                            <div id="change_room_menu" method="POST" action='#'>
-                                <form id="change_room">
-                                    <input class="menu_submit" type="submit" value="Change Name / Room">
-                                </form>
-                            </div>
-
-                        </div> 
-                        <!-- ROW Break -->
-                        <div class="row">
-
-                            <div id="question_menu">
-                                <form id="start_room" method="POST" action='#'>
-
-                                    <div class="row rowl">
-                                        <div class="col-50">
-                                            <label for="fname">Category</label>
-                                        </div>
-                                        <div class="col-50">
-                                            <select id="category" name="category">
-                                                <option value="0">Any</option>
-                                                <option value="9">General Knowledge</option>
-                                                <option value="11">Film</option>
-                                                <option value="22">Geography</option>
-                                                <option value="23">History</option>
-                                                <option value="12">Music</option>
-                                                <option value="20">Mythology</option>
-                                                <option value="17">Science & Nature</option>
-                                                <option value="21">Sports</option>
-                                                <option value="14">TV</option>
-                                                <option value="15">Video Games</option>
-                                              </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="row rowd">
-                                        <div class="col-50">
-                                            <label for="fname">No. of Questions</label>
-                                        </div>
-                                        <div class="col-50">
-                                            <input class="menu_item" type="text" name="question_num" id="question_num" placeholder="No. questions per round" value="5" required>
-                                        </div>
-                                    </div>
-                                    <div class="row">
-                                        <div class="col-50">
-                                            <input class="menu_submit" type="submit" name="quiz" value="Start Quiz">
-                                        </div>
-                                        <div class="col-50">
-                                            <input class="menu_submit" type="submit" name="liar" value="Start Liar">
-                                        </div>
-                                    </div>
-                                </form>
-                            </div>
-
-                        </div>
-
-                </div>
-                <!-- <h2>Receive:</h2>
-                <div id="log"></div> -->
-
-                <div id="leaderboard_handler">
-                    <h3  class="leaderboard_h3">Leaderboard:</h3>
-                    <div id="room_leaderboard" ></div>
+                <!-- Join Room Screen (shown first) -->
+                <div id="join_screen" class="menubar" style="grid-column: 1; grid-row: 1;">
+                    <h3 class="menu_h3">🎮 Join the Game</h3>
+                    <form id="name_join" method="POST" action='#'>
+                        <label for="username"><strong>Your Player Name</strong></label>
+                        <input type="text" name="username" id="username" placeholder="Enter your awesome name" required maxlength="20">
+                        
+                        <label for="join_room" style="margin-top: 1rem;"><strong>Room Code</strong></label>
+                        <input type="text" name="join_room" id="join_room" placeholder="Enter room code" required maxlength="30">
+                        
+                        <input class="menu_submit" type="submit" value="🚀 Join Room">
+                    </form>
                 </div>
 
-            </div>
+                <!-- Room Status & Host Controls (shown after joining) -->
+                <div id="room_info_screen" class="menubar" style="display: none; grid-column: 1; grid-row: 1;">
+                    <h3 class="menu_h3">📍 Room Status</h3>
+                    <div style="margin-bottom: 1.5rem;">
+                        <p><strong>Room Code:</strong> <span id="current_room" style="background: var(--secondary); padding: 0.5rem; border: 2px solid var(--text-primary); font-weight: 900;">--</span></p>
+                        <p><strong>Players:</strong> <span id="player_count">0</span></p>
+                        <p><strong>Your Role:</strong> <span id="player_role" style="background: var(--accent); padding: 0.25rem 0.75rem; border-radius: 20px; font-weight: 900;">Player</span></p>
+                    </div>
+                    
+                    <!-- Host Controls (only visible to host) -->
+                    <div id="host_controls" style="display: none; border-top: 3px dashed var(--border); padding-top: 1.5rem;">
+                        <h4 style="color: var(--primary); font-weight: 900;">⚙️ Game Settings</h4>
+                        
+                        <label for="category"><strong>Category</strong></label>
+                        <select id="category" name="category">
+                            <option value="0">🌍 Any Category</option>
+                            <option value="9">🧠 General Knowledge</option>
+                            <option value="11">🎬 Film</option>
+                            <option value="22">🗺️ Geography</option>
+                            <option value="23">📜 History</option>
+                            <option value="12">🎵 Music</option>
+                            <option value="20">🏛️ Mythology</option>
+                            <option value="17">🔬 Science & Nature</option>
+                            <option value="21">⚽ Sports</option>
+                            <option value="14">📺 TV</option>
+                            <option value="15">🎮 Video Games</option>
+                        </select>
 
-            <!-- <h2>Room Details:</h2> -->
-            
-            <div id="questions" class="main_zone">
-                <h3  class="question_h3">Question:</h3>
-                <div id="question_zone" ></div>
+                        <label for="question_num" style="margin-top: 1rem;"><strong>Number of Questions</strong></label>
+                        <input type="number" name="question_num" id="question_num" placeholder="5" value="5" min="1" max="50" required>
+                        
+                        <!-- Advanced Options Collapsible -->
+                        <details style="margin-top: 1.5rem; border: 2px solid var(--accent); padding: 1rem; border-radius: 8px;">
+                            <summary style="cursor: pointer; font-weight: 900; color: var(--accent); margin: -1rem -1rem 0 -1rem; padding: 1rem;">
+                                ⚡ Advanced Options
+                            </summary>
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 2px solid var(--accent);">
+                                <label for="quiz_timer"><strong>Seconds Per Question</strong></label>
+                                <input type="number" name="quiz_timer" id="quiz_timer" value="15" min="5" max="60">
+                                
+                                <label for="answer_timer" style="margin-top: 1rem;"><strong>Seconds to Show Answer</strong></label>
+                                <input type="number" name="answer_timer" id="answer_timer" value="3" min="1" max="10">
+                                
+                                <label for="liar_submit_timer" style="margin-top: 1rem;"><strong>Seconds to Submit Lie (Liar Mode)</strong></label>
+                                <input type="number" name="liar_submit_timer" id="liar_submit_timer" value="10" min="3" max="30">
+                            </div>
+                        </details>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-top: 1.5rem;">
+                            <input class="menu_submit" type="submit" name="quiz" value="📝 Start Quiz" style="background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%); color: var(--text-primary); margin: 0;">
+                            <input class="menu_submit secondary" type="submit" name="liar" value="🤥 Start Liar" style="margin: 0;">
+                        </div>
+                    </div>
+                    
+                    <form id="change_room" style="margin-top: 1rem;">
+                        <input class="menu_submit" type="submit" value="🔄 Change Room" style="margin: 0;">
+                    </form>
+                </div>
+
+                <!-- Leaderboard Panel -->
+                <div id="leaderboard_handler" style="display: none; grid-column: 1; grid-row: 2;">
+                    <h3 class="leaderboard_h3">🏆 Leaderboard</h3>
+                    <div id="room_leaderboard"></div>
+                </div>
+
+            <!-- Questions Panel -->
+            <div id="questions" class="main_zone" style="display: none;">
+                <h3 class="question_h3">❓ Question</h3>
+                <div id="question_zone"></div>
                 <div id="room_stats"></div>
-                <h3 class="answer_h3">Answer:</h3>
-                <div id="answer_zone" ></div>
+                <h3 class="answer_h3">✅ Answer</h3>
+                <div id="answer_zone"></div>
             </div>
 
+            <!-- Game End Screen -->
             <div id="game_end_screen" class="main_zone" style="display: none;">
             </div>
-
-            <!-- <div id="game_splash_screen" class="white-popup mfp-with-anim mfp-hide">
-                
-                You may put any HTML here. This is dummy copy. It is not meant to be read. 
-                It has been placed here solely to demonstrate the look and feel of finished, typeset text. 
-                Only for show. He who searches for meaning here will be sorely disappointed.
-
-            </div> -->
         </div>
     </div>
-        <div class="footer">
-            Created by <a href="https://alexsleat.co.uk">Alex</a><br><br>
-            <a href="https://www.buymeacoffee.com/alexsleat"><img height="80px" width="auto" src="/static/bmc.png"></a><br>
-            Background Image: <a href="https://www.vecteezy.com/vector-art/2859080-colorful-90s-seamless-pattern">by Vecteezy</a>
-        </div>
-    
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Made with ❤️ by <a href="https://alexsleat.co.uk" target="_blank">Alex</a></p>
+        <a href="https://www.buymeacoffee.com/alexsleat" target="_blank">
+            <img height="50px" width="auto" src="/static/bmc.png" alt="Buy Me a Coffee">
+        </a>
+        <p style="font-size: 0.75rem; opacity: 0.7;">Background Image: <a href="https://www.vecteezy.com/vector-art/2859080-colorful-90s-seamless-pattern" target="_blank">by Vecteezy</a></p>
+    </div>
 </body>
 </html>
