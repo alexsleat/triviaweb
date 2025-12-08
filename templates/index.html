@@ -163,7 +163,7 @@
                         ans = "<form id='ans' method='POST' action='#'>";
                         for (let i = 0; i < answers.length; i++) {
                             var short_id_name = answers[i].replace(/[^A-Z0-9]/ig, "");
-                            ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + answers[i] + "' name='" + answers[i] + "' > <br>";
+                            ans += "<div class='answer_wrapper'><input type='button' class='ans' id='ans_" + short_id_name + "' value='" + answers[i] + "' name='" + answers[i] + "' /><span class='answer_icon' aria-hidden='true'></span></div><br>";
                         }
                         ans += "</form>";
 
@@ -286,32 +286,34 @@
                 ans = "<form id='ans' method='POST' action='#'>";
                 for (let i = 0; i < q[3].length; i++) {
                     var short_id_name = q[3][i].replace(/[^A-Z0-9]/ig, "");
-                    ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + q[3][i] + "' name='" + q[3][i] + "' > <br>";
+                    // Wrap the input so we can show an animated icon via CSS/DOM
+                    ans += "<div class='answer_wrapper'><input type='button' class='ans' id='ans_" + short_id_name + "' value='" + q[3][i] + "' name='" + q[3][i] + "' /><span class='answer_icon' aria-hidden='true'></span></div><br>";
                 }
                 ans += "</form>";
 
                 $('#question_zone').html(que);
                 $('#answer_zone').html(ans);
 
-                // Handle answer buttons, emit the answer to the room
-                $('input:button').click(function(event) {
+                // Handle answer buttons, emit the answer to the room.
+                // Keep the `.ans` class so layout (width/padding/font-size) is retained,
+                // and only toggle `.ans_selected` to apply the selected styling.
+                // Delegate clicks on answer inputs
+                $('#answer_zone').off('click', 'input.ans').on('click', 'input.ans', function(event) {
                     var btnValue = $(this).val();
-                    var element = this; // adding the current object in a variable
+                    var element = this;
 
                     // Send Answer
                     socket.emit('my_answer', {room: $('#join_room').val(),
                                             username: $('#username').val(), 
                                             answer: btnValue });
 
-                    // Remove any other selected answers, in case they be doing that.
-                    var all_ans_seletected = document.getElementsByClassName('ans_selected');
+                    // Remove previous selection states
+                    $('input.ans').removeClass('ans_selected');
+                    $('.answer_wrapper').removeClass('selected revealed-wrong revealed-correct');
 
-                    for (var i = 0; i < all_ans_seletected.length; i++) {
-                        all_ans_seletected[0].classList.add("ans");
-                        all_ans_seletected[0].classList.remove("ans_selected");
-                    }
-
-                    $(element).removeClass("ans").addClass("ans_selected");
+                    // Mark selected input and wrapper
+                    $(element).addClass('ans_selected');
+                    $(element).closest('.answer_wrapper').addClass('selected');
 
                     return false;
                 });
@@ -321,14 +323,26 @@
             });
 
             // Question answers handler
-            socket.on('my_question_answer', function(msg, cb) {
+                socket.on('my_question_answer', function(msg, cb) {
 
                 msg_json = JSON.parse(msg.data);
 
                 var short_id_name = msg_json[1].replace(/[^A-Z0-9]/ig, "");
-                var element = document.getElementById("ans_" +short_id_name);
-                console.log(short_id_name);
-                $(element).addClass("ans_correct");
+                var element = document.getElementById("ans_" + short_id_name);
+                console.log('Correct answer id:', short_id_name);
+
+                // Mark the correct input and its wrapper
+                if (element) {
+                    $(element).addClass('ans_correct');
+                    $(element).closest('.answer_wrapper').addClass('revealed-correct');
+                }
+
+                // Any previously selected answer that is NOT correct should be shown as wrong
+                $('input.ans.ans_selected').each(function() {
+                    if (!$(this).hasClass('ans_correct')) {
+                        $(this).closest('.answer_wrapper').addClass('revealed-wrong');
+                    }
+                });
 
             });
 
@@ -429,6 +443,16 @@
                 // Hide the questions and show the end screen
                 $('#questions').hide();
                 $('#game_end_screen').html(html).show();
+
+                // Restore room info and host controls so another round can be started
+                $('#room_info_screen').show();
+                $('#leaderboard_handler').show();
+                // Show host controls only to the host
+                if (isHost) {
+                    $('#host_controls').show();
+                } else {
+                    $('#host_controls').hide();
+                }
                 
                 if (cb) cb();
             });

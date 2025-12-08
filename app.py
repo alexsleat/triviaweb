@@ -187,6 +187,10 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, category="
         threads_dict[room]["host_sid"] = None
         threads_dict[room]["host_username"] = None
         threads_dict[room]["last_active"] = time.time()
+        # Default timers (seconds)
+        threads_dict[room]["quiz_timer"] = 10
+        threads_dict[room]["answer_timer"] = 3
+        threads_dict[room]["liar_submit_timer"] = 10
         threads_dict[room]["running"] = running
         threads_dict[room]["gametype"] = ""
         threads_dict[room]["category"] = ""
@@ -309,18 +313,22 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
             answers.insert(0, correct_answer )
             random.shuffle(answers)
 
+            # Determine timers from room state (allow overrides set at start)
+            q_timer = threads_dict[room].get("quiz_timer", quiz_timer)
+            a_timer = threads_dict[room].get("answer_timer", q_timer)
+
             # store question/answers and when it will end for resync
             threads_dict[room]["current_question"] = current_question
             threads_dict[room]["current_answers"] = answers
-            threads_dict[room]["question_ends_at"] = time.time() + quiz_timer
-            threads_dict[room]["last_quiz_duration"] = quiz_timer
+            threads_dict[room]["question_ends_at"] = time.time() + q_timer
+            threads_dict[room]["last_quiz_duration"] = q_timer
 
             question_l = ["Q"+str(count), "text_question", current_question, answers]
             convert_and_send_json(room, 'my_question', {'data': question_l, 'count': count})
             
             #############################################
-            # Send the countdown
-            countdown_timer(room, quiz_timer, "question_countdown")
+            # Send the countdown for the question period
+            countdown_timer(room, q_timer, "question_countdown")
             
             #############################################
             # Send the answer and scoreboard
@@ -350,7 +358,8 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
                     "games_won": threads_dict[room]["games_won"].get(player, 0)
                 }
             convert_and_send_json(room, 'my_leaderboard', {'data': leaderboard_data})
-            countdown_timer(room, quiz_timer, "next_question")
+            # Wait answer/show period before the next question
+            countdown_timer(room, a_timer, "next_question")
 
     #### When no 
     # else:
@@ -361,11 +370,13 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
     # Emit game end event with final leaderboard
     logger.info("Quiz game ended for room %s", room)
     
-    # Find the winner and update games_won
+    # Find winners (handle ties) and update games_won
     if threads_dict[room]["points"]:
-        winner = max(threads_dict[room]["points"], key=threads_dict[room]["points"].get)
-        threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
-        logger.info("Quiz game winner: %s", winner)
+        max_score = max(threads_dict[room]["points"].values())
+        winners = [p for p, s in threads_dict[room]["points"].items() if s == max_score]
+        for winner in winners:
+            threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
+        logger.info("Quiz game winners for room %s: %s", room, winners)
     
     # Build game_end data with both points and games_won
     game_end_data = {}
@@ -467,13 +478,16 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
                         question_l = ["Q" + str(count), "text_question", current_question, ["liar"]]
                         threads_dict[room]["current_question"] = current_question
                         threads_dict[room]["current_answers"] = ["liar"]
-                        threads_dict[room]["question_ends_at"] = time.time() + (quiz_timer * WRITE_ANSWER_WEIGHT)
-                        threads_dict[room]["last_quiz_duration"] = quiz_timer * WRITE_ANSWER_WEIGHT
+
+                        # Use configured liar submit duration (fall back to WRITE_ANSWER_WEIGHT * quiz_timer)
+                        liar_submit = threads_dict[room].get("liar_submit_timer", quiz_timer * WRITE_ANSWER_WEIGHT)
+                        threads_dict[room]["question_ends_at"] = time.time() + liar_submit
+                        threads_dict[room]["last_quiz_duration"] = liar_submit
 
                         convert_and_send_json(room, "my_liar_question", {"data": question_l, "count": count})
 
                         # Wait for users to submit lies.
-                        countdown_timer(room, quiz_timer * WRITE_ANSWER_WEIGHT, "question_countdown")
+                        countdown_timer(room, liar_submit, "question_countdown")
 
                         # Construct answer list combining incorrect answers and user lies.
                         answers = QUESTIONS[count]["incorrect_answers"] if QUESTIONS else []
@@ -495,7 +509,10 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
                         convert_and_send_json(room, "my_question", {"data": question_l, "count": count})
 
                         # Allow time for users to answer the combined list.
-                        countdown_timer(room, quiz_timer, "question_countdown")
+                        # For liar mode we use the room's quiz_timer and liar_submit_timer
+                        q_timer = threads_dict[room].get("quiz_timer", quiz_timer)
+                        liar_submit = threads_dict[room].get("liar_submit_timer", q_timer)
+                        countdown_timer(room, q_timer, "question_countdown")
 
                         # Reveal the correct answer and update scoring.
                         logger.info("Answer reveal (liar mode) for room %s (question %s)", room, count)
@@ -531,11 +548,13 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
         # Emit game end event with final leaderboard
         logger.info("Liar game ended for room %s", room)
         
-        # Find the winner and update games_won
+        # Find winners (handle ties) and update games_won
         if threads_dict[room]["points"]:
-            winner = max(threads_dict[room]["points"], key=threads_dict[room]["points"].get)
-            threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
-            logger.info("Liar game winner: %s", winner)
+            max_score = max(threads_dict[room]["points"].values())
+            winners = [p for p, s in threads_dict[room]["points"].items() if s == max_score]
+            for winner in winners:
+                threads_dict[room]["games_won"][winner] = threads_dict[room]["games_won"].get(winner, 0) + 1
+            logger.info("Liar game winners for room %s: %s", room, winners)
         
         # Build game_end data with both points and games_won
         game_end_data = {}
@@ -817,7 +836,16 @@ def start_room(message):
         logger.info("Reset scores for all players in room %s", room)
     
     ## Check if room already exists:
-    update_room_list(room, True, quiz_flag, 10, category, room_type)
+    # Use timers provided by the client if available
+    quiz_timer = int(message.get('quiz_timer', 10))
+    answer_timer = int(message.get('answer_timer', 3))
+    liar_submit_timer = int(message.get('liar_submit_timer', 10))
+
+    update_room_list(room, True, quiz_flag, quiz_timer, category, room_type)
+    # store timers in the room state for use by threads
+    threads_dict[room]["quiz_timer"] = quiz_timer
+    threads_dict[room]["answer_timer"] = answer_timer
+    threads_dict[room]["liar_submit_timer"] = liar_submit_timer
     # set room-level metadata for resync
     threads_dict[room].setdefault("current_question_index", None)
     threads_dict[room].setdefault("current_question", None)

@@ -542,20 +542,85 @@ label {
 }
 
 .ans_selected {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    /* Neutral visual for user's current selection — keep sizing from .ans */
+    border-color: var(--primary);
+    background: linear-gradient(135deg, #F6F9FF 0%, #EEF5FF 100%);
+    color: var(--text-primary);
+    transform: rotate(-3deg) translateY(-4px);
+    box-shadow: 6px 6px 0px var(--shadow-md);
+    transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Selected but NOT correct -> show as a clear incorrect state */
+.ans_selected:not(.ans_correct) {
+    border-color: var(--danger);
+    background: linear-gradient(135deg, var(--danger) 0%, #FF3B3B 100%);
     color: white;
-    border: 3px solid var(--primary-dark);
-    box-shadow: 8px 8px 0px rgba(255, 107, 107, 0.4), 16px 16px 0px rgba(0,0,0,0.1);
-    transform: rotate(0deg) scale(1.02);
+    box-shadow: 8px 8px 0px rgba(255, 83, 83, 0.25);
+    transform: rotate(0deg) translateY(-2px);
 }
 
 .ans_correct {
+    /* Emphasised correct answer — bright green, prominent shadow */
     background: linear-gradient(135deg, var(--success) 0%, #00A86B 100%);
     color: white;
     border: 3px solid #00A86B;
-    box-shadow: 8px 8px 0px rgba(0, 208, 132, 0.3), 16px 16px 0px rgba(0,0,0,0.1);
-    transform: rotate(0deg);
+    box-shadow: 10px 10px 0px rgba(0, 208, 132, 0.35), 16px 16px 0px rgba(0,0,0,0.08);
+    transform: rotate(0deg) scale(1.02);
+    transition: transform 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
 }
+
+/* Wrapper for answer + icon so we can animate check/X decorations */
+.answer_wrapper {
+    position: relative;
+    display: block;
+    width: 100%;
+}
+
+.answer_wrapper .ans {
+    /* ensure input fills wrapper and icon can overlay */
+    position: relative;
+    z-index: 1;
+    padding-right: 3.5rem; /* space for icon */
+}
+
+.answer_icon {
+    position: absolute;
+    right: 0.75rem;
+    top: 50%;
+    transform: translateY(-50%) scale(0.6);
+    width: 2.2rem;
+    height: 2.2rem;
+    display: inline-block;
+    z-index: 2;
+    pointer-events: none;
+    opacity: 0;
+    transition: transform 0.25s cubic-bezier(.2,.9,.2,1), opacity 0.18s ease;
+}
+
+/* Checkmark (correct) */
+.answer_wrapper.revealed-correct .answer_icon {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M9.3 16.3L4.7 11.7 3.3 13.1l6 6 12-12L19.7 6l-10.4 10.3z'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Wrong X icon */
+.answer_wrapper.revealed-wrong .answer_icon {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23ffffff' d='M18.3 5.7L12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3 10.6 10.6l6.3-6.3z'/></svg>");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+}
+
+/* Color the icons to match background of the button when revealed */
+.answer_wrapper.revealed-correct .answer_icon { background-color: transparent; }
+.answer_wrapper.revealed-wrong .answer_icon { background-color: transparent; }
 
 /* Liar mode input */
 .lie_input {
