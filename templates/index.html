@@ -35,7 +35,13 @@
             // Connect to the Socket.IO server.
             // The connection URL has the following format, relative to the current page:
             //     http[s]://<domain>:<port>[/<namespace>]
-            var socket = io();
+            var socket = io({
+                reconnection: true,
+                reconnectionDelay: 500,
+                reconnectionDelayMax: 3000,
+                reconnectionAttempts: 10,
+                transports: ['websocket', 'polling']
+            });
             //var socket = io('http://192.168.1.140:5500');
             //var socket = io('https://triviaweb.deta.dev:5000');
             //var socket = io('127.0.0.1:5500');
@@ -76,6 +82,83 @@
             // server is established.
             socket.on('connect', function() {
                 socket.emit('my_event', {data: 'I\'m connected!'});
+                $('#log').append('<br>Socket connected');
+            });
+
+            // Handle disconnection
+            socket.on('disconnect', function() {
+                $('#log').append('<br><span style="color:red;">Socket disconnected - attempting to reconnect...</span>');
+            });
+
+            // Handle reconnection
+            socket.on('reconnect', function() {
+                $('#log').append('<br><span style="color:green;">Socket reconnected! Rejoining room...</span>');
+                // Rejoin the room after reconnection
+                var username = getCookie("username");
+                var room = getCookie("room");
+                if (room && username) {
+                    socket.emit('name_join', {username: username, room: room});
+                    // ask server for current room state after rejoining
+                    setTimeout(function() {
+                        socket.emit('resync_request', {username: username, room: room});
+                    }, 250);
+                }
+            });
+
+            // Handle resync response from server when reconnecting
+            socket.on('resync_response', function(msg, cb) {
+                try {
+                    var running = msg.running;
+                    if (!running) return;
+
+                    var question = msg.current_question;
+                    var answers = msg.current_answers || [];
+                    var time_remaining = msg.time_remaining || 0;
+
+                    if (question) {
+                        // Rebuild question UI similar to my_question
+                        que = "<div id='question'> <h2 class='question_h2'>" + question + "</h2> </div>";
+                        ans = "<form id='ans' method='POST' action='#'>";
+                        for (let i = 0; i < answers.length; i++) {
+                            var short_id_name = answers[i].replace(/[^A-Z0-9]/ig, "");
+                            ans += "<input type='button' class='ans' id='ans_" + short_id_name + "' value='" + answers[i] + "' name='" + answers[i] + "' > <br>";
+                        }
+                        ans += "</form>";
+
+                        $('#question_zone').html(que);
+                        $('#answer_zone').html(ans);
+                    }
+
+                    // Update leaderboard if present
+                    if (msg.leaderboard) {
+                        var text = "";
+                        for (const [key, value] of Object.entries(msg.leaderboard)) {
+                            text += "<b>" + key + "</b> : " + value + "<br>";
+                        }
+                        text += "<br>";
+                        $('#room_leaderboard').html(text);
+                    }
+
+                    // Update countdown bar if we have duration
+                    if (time_remaining && msg.last_quiz_duration) {
+                        var percentage_left = time_remaining / msg.last_quiz_duration * 100;
+                        percentage_left = 100 + (percentage_left * -1);
+                        text = '<div class="loading-bar-bg">';
+                        text += '<div class="loading-bar-bar" style="height:24px;width:' + percentage_left +'%"></div>';
+                        text += '</div>';
+                        $('#room_stats').html(text);
+                    }
+                } catch (e) {
+                    console.error('Error handling resync_response', e, msg);
+                }
+                if (cb) cb();
+            });
+
+            // Handle user disconnected notification
+            socket.on('user_disconnected', function(msg, cb) {
+                $('#log').append('<br><span style="color:orange;">A player has disconnected</span>');
+                if (cb)
+                    cb();
             });
 
             // Event handler for server sent data.
@@ -234,10 +317,12 @@
             // round trip time is measured.
             var ping_pong_times = [];
             var start_time;
-            window.setInterval(function() {
-                start_time = (new Date).getTime();
-                $('#transport').text(socket.io.engine.transport.name);
-                socket.emit('my_ping');
+            var ping_interval = window.setInterval(function() {
+                if (socket.connected) {
+                    start_time = (new Date).getTime();
+                    $('#transport').text(socket.io.engine.transport.name);
+                    socket.emit('my_ping');
+                }
             }, 1000);
 
             // Handler for the "pong" message. When the pong is received, the

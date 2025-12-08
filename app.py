@@ -1,6 +1,7 @@
 from threading import Lock
 from queue import Queue
 import random
+import time
 
 from flask import Flask, render_template, session, request, \
     copy_current_request_context
@@ -21,7 +22,9 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 #socketio = SocketIO(app, async_mode=async_mode, cors_allowed_origins='https://triviaweb.deta.dev')
 # socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, cors_allowed_origins='*')
-socketio = SocketIO(app, async_mode=async_mode, async_handlers=False)
+socketio = SocketIO(app, async_mode=async_mode, async_handlers=False, 
+                     ping_timeout=120, ping_interval=10, 
+                     cors_allowed_origins="*")
 
 thread = None
 thread_lock = Lock()
@@ -29,6 +32,7 @@ thread_lock = Lock()
 h = HTMLParser()
 
 threads_dict = {}
+sid_room_map = {}
 
 #############################################
 #
@@ -42,7 +46,8 @@ def countdown_timer(room, quiz_timer, count_type):
         data_string = [count_type, quiz_timer - i, quiz_timer]
         convert_and_send_json(room, 'my_countdown', {'data': data_string})
         
-        socketio.sleep(1)
+        # Use time.sleep with smaller intervals to allow ping/pong to work
+        time.sleep(1)
 
     data_string = [count_type, 0, quiz_timer]
     convert_and_send_json(room, 'my_countdown', {'data': data_string})
@@ -86,9 +91,9 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, category="
                 threads_dict[room]["category"] = category
                 print(threads_dict)
                 if(gametype=="quiz"):
-                    threads_dict[room]["thread"] = socketio.start_background_task( room_quiz_thread(room, quiz_flag, quiz_timer, category) )
+                    threads_dict[room]["thread"] = socketio.start_background_task(room_quiz_thread, room, quiz_flag, quiz_timer, category)
                 elif(gametype=="liar"):
-                    threads_dict[room]["thread"] = socketio.start_background_task( room_liar_thread(room, quiz_flag, quiz_timer, category) )
+                    threads_dict[room]["thread"] = socketio.start_background_task(room_liar_thread, room, quiz_flag, quiz_timer, category)
 
             else:
                 threads_dict[room]["running"] = False
@@ -101,6 +106,8 @@ def update_room_list(room, running=False, quiz_flag=5, quiz_timer=10, category="
         threads_dict[room]["answers"] = {}
         threads_dict[room]["points"] = { }
         threads_dict[room]["liar_answers"] = {}
+        threads_dict[room]["sids"] = set()
+        threads_dict[room]["users"] = {}
         threads_dict[room]["running"] = running
         threads_dict[room]["gametype"] = ""
         threads_dict[room]["category"] = ""
@@ -130,16 +137,22 @@ def convert_to_json(input_list):
 #   input: (str) room, (str) broadcaster, (dict) payload
 # 
 def convert_and_send_json(room, broadcast_title, input_dict):
+    try:
+        # Skip emit if room has no connected sids (reduce useless broadcasts)
+        if room in threads_dict and (not threads_dict[room].get("sids") or len(threads_dict[room].get("sids")) == 0):
+            print(f"No clients in room {room}, skipping emit {broadcast_title}")
+            return
 
-
-    output_dict = {}
-    for key, value in input_dict.items():
-        output_dict[key] = convert_to_json(value)
-    
-    print("OD::::: ", output_dict)
-    socketio.emit(broadcast_title,
-                    output_dict,
-                    to=room)
+        output_dict = {}
+        for key, value in input_dict.items():
+            output_dict[key] = convert_to_json(value)
+        
+        print("OD::::: ", output_dict)
+        socketio.emit(broadcast_title,
+                        output_dict,
+                        to=room, skip_sid=None)
+    except Exception as e:
+        print(f"Error emitting to room {room}: {e}")
 
 
 ###############################################
@@ -147,6 +160,7 @@ def convert_and_send_json(room, broadcast_title, input_dict):
 #
 #################################################
 def room_quiz_thread(room, quiz_flag, quiz_timer, category):
+    global threads_dict
     print("QUIZ TIME")
 
     QUESTION_URL = "https://opentdb.com/api.php?amount=" + str(quiz_flag)
@@ -160,11 +174,13 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
     correct_answer = ""
 
 
-    with urllib.request.urlopen(QUESTION_URL) as url:
-        data = json.load(url)
-
-        QUESTIONS = data["results"]
-        # print(QUESTIONS)
+    try:
+        with urllib.request.urlopen(QUESTION_URL, timeout=10) as url:
+            data = json.load(url)
+            QUESTIONS = data["results"]
+    except Exception as e:
+        print(f"Error fetching questions: {e}")
+        QUESTIONS = []
 
     count = 0
     ### Check if there is questions in the list
@@ -178,16 +194,35 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
             if count >= len(QUESTIONS):
                 count = 0
 
+            # Clear previous answers
+            threads_dict[room]["answers"] = {}
+
+            # set current question metadata for resyncs
+            threads_dict[room]["current_question_index"] = count
+            threads_dict[room]["current_question"] = None
+            threads_dict[room]["current_answers"] = None
+            threads_dict[room]["question_ends_at"] = None
+
             #############################################
             # Send the questions
             print("QUESTION ::: ", QUESTIONS[count])
 
-            current_question = QUESTIONS[count]["question"]
-            correct_answer = QUESTIONS[count]["correct_answer"]
-            
-            answers = QUESTIONS[count]["incorrect_answers"]
+            if QUESTIONS:
+                current_question = QUESTIONS[count]["question"]
+                correct_answer = QUESTIONS[count]["correct_answer"]
+                answers = QUESTIONS[count]["incorrect_answers"]
+            else:
+                current_question = "(No question available)"
+                correct_answer = ""
+                answers = []
             answers.insert(0, correct_answer )
             random.shuffle(answers)
+
+            # store question/answers and when it will end for resync
+            threads_dict[room]["current_question"] = current_question
+            threads_dict[room]["current_answers"] = answers
+            threads_dict[room]["question_ends_at"] = time.time() + quiz_timer
+            threads_dict[room]["last_quiz_duration"] = quiz_timer
 
             question_l = ["Q"+str(count), "text_question", current_question, answers]
             convert_and_send_json(room, 'my_question', {'data': question_l, 'count': count})
@@ -204,7 +239,6 @@ def room_quiz_thread(room, quiz_flag, quiz_timer, category):
             data_string = ["The correct answer was ", correct_answer]
             convert_and_send_json(room, 'my_question_answer', {'data': data_string})
 
-            global threads_dict
             for username, answer in threads_dict[room]["answers"].items():
 
                 correct =  True if answer == correct_answer else False
@@ -250,9 +284,13 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
     correct_answer = ""
 
     ## Load the questions from opentdb:
-    with urllib.request.urlopen(QUESTION_URL) as url:
-        data = json.load(url)
-        QUESTIONS = data["results"]
+    try:
+        with urllib.request.urlopen(QUESTION_URL, timeout=10) as url:
+            data = json.load(url)
+            QUESTIONS = data["results"]
+    except Exception as e:
+        print(f"Error fetching questions: {e}")
+        QUESTIONS = []
 
     count = 0
     ### Check if there is questions in the list
@@ -268,17 +306,35 @@ def room_liar_thread(room, quiz_flag, quiz_timer, category):
             if count >= len(QUESTIONS):
                 count = 0
 
+            # Clear previous answers from the quiz mode
+            threads_dict[room]["answers"] = {}
+            # prepare resync metadata
+            threads_dict[room]["current_question_index"] = count
+            threads_dict[room]["current_question"] = None
+            threads_dict[room]["current_answers"] = None
+            threads_dict[room]["question_ends_at"] = None
+
             #############################################
             # Send the questions
             print("QUESTION ::: ", QUESTIONS[count])
 
-            current_question = QUESTIONS[count]["question"]
-            correct_answer = QUESTIONS[count]["correct_answer"]
+            if QUESTIONS:
+                current_question = QUESTIONS[count]["question"]
+                correct_answer = QUESTIONS[count]["correct_answer"]
+            else:
+                current_question = "(No question available)"
+                correct_answer = ""
 
             ### Clear the liar answers:
             threads_dict[room]["liar_answers"] = {}
             
             question_l = ["Q"+str(count), "text_question", current_question, ["liar"]]
+            # store metadata for resync and set answer timeout
+            threads_dict[room]["current_question"] = current_question
+            threads_dict[room]["current_answers"] = ["liar"]
+            threads_dict[room]["question_ends_at"] = time.time() + (quiz_timer * WRITE_ANSWER_WEIGHT)
+            threads_dict[room]["last_quiz_duration"] = quiz_timer * WRITE_ANSWER_WEIGHT
+
             convert_and_send_json(room, 'my_liar_question', {'data': question_l, 'count': count})
             
             ## Send the countdown and wait for user answers
@@ -421,6 +477,39 @@ def my_ping():
 
 
 @socketio.event
+def resync_request(message):
+    """Client requests current room state to resynchronize after reconnect."""
+    room = message.get('room')
+    username = message.get('username')
+    sid = request.sid
+    print(f"Resync request from sid={sid} user={username} room={room}")
+
+    if room not in threads_dict:
+        socketio.emit('resync_response', {'running': False}, to=sid)
+        return
+
+    room_state = threads_dict[room]
+    # compute time remaining
+    ends_at = room_state.get('question_ends_at')
+    if ends_at:
+        time_remaining = max(0, int(ends_at - time.time()))
+    else:
+        time_remaining = 0
+
+    resp = {
+        'running': room_state.get('running', False),
+        'current_question_index': room_state.get('current_question_index'),
+        'current_question': room_state.get('current_question'),
+        'current_answers': room_state.get('current_answers'),
+        'time_remaining': time_remaining,
+        'leaderboard': room_state.get('points', {}),
+        'last_quiz_duration': room_state.get('last_quiz_duration')
+    }
+
+    socketio.emit('resync_response', resp, to=sid)
+
+
+@socketio.event
 def connect():
     global thread
     # with thread_lock:
@@ -432,6 +521,22 @@ def connect():
 @socketio.on('disconnect')
 def test_disconnect():
     print('Client disconnected', request.sid)
+    # Find which room this user was in and try to notify others
+    global threads_dict
+    sid = request.sid
+    # remove sid mapping and notify any room it belonged to
+    for room in list(threads_dict.keys()):
+        if sid in threads_dict[room].get("sids", set()):
+            username = threads_dict[room]["users"].get(sid)
+            try:
+                threads_dict[room]["sids"].remove(sid)
+            except Exception:
+                pass
+            threads_dict[room]["users"].pop(sid, None)
+            print(f"Removed sid {sid} (user={username}) from room {room}")
+            socketio.emit('user_disconnected', 
+                         {'data': f'Player {username} disconnected'},
+                         to=room)
 
 
 @socketio.event
@@ -447,6 +552,13 @@ def name_join(message):
         leave_room(i)
 
     join_room(room)
+    # add sid -> room and room -> sid mappings
+    sid = request.sid
+    if room not in threads_dict:
+        update_room_list(room, False)
+    threads_dict[room].setdefault("sids", set()).add(sid)
+    threads_dict[room].setdefault("users", {})[sid] = username
+    sid_room_map[sid] = room
     print("Now in: ", rooms())
 
     # session['receive_count'] = session.get('receive_count', 0) + 1
@@ -477,6 +589,11 @@ def start_room(message):
 
     ## Check if room already exists:
     update_room_list(room, True, quiz_flag, 10, category, room_type)
+    # set room-level metadata for resync
+    threads_dict[room].setdefault("current_question_index", None)
+    threads_dict[room].setdefault("current_question", None)
+    threads_dict[room].setdefault("current_answers", None)
+    threads_dict[room].setdefault("question_ends_at", None)
     
 
 @socketio.event
@@ -491,6 +608,7 @@ def my_answer(message):
     global threads_dict
     threads_dict[room]["answers"][username] = answer
 
+
 @socketio.event
 def my_liar_answer(message):
 
@@ -502,6 +620,7 @@ def my_liar_answer(message):
 
     global threads_dict
     threads_dict[room]["liar_answers"][username] = answer
+
 
 if __name__ == '__main__':
     # socketio.run(app, host='0.0.0.0', port=5500)
